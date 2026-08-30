@@ -58,4 +58,13 @@ public class Evaluacion {
 
     @Column(name = "fecha", nullable = false)
     private LocalDate fecha;
+
+    /**
+     * Identificador de esta evaluación en el sistema de origen (el ERP). Es la clave
+     * que hace idempotente la sincronización: si el mismo evento llega dos veces, se
+     * actualiza la fila existente en vez de insertar una nueva (SUP-09, entrega al
+     * menos una vez). Nulo en las evaluaciones cargadas directamente por migración.
+     */
+    @Column(name = "id_evaluacion_origen", length = 64, unique = true)
+    private String idEvaluacionOrigen;
 }

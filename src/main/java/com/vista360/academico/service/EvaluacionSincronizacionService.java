@@ -26,6 +26,10 @@ import java.util.List;
  *
  * <p>Asume que la matrícula (estudiante + materia + periodo) ya existe,
  * sincronizada previamente por otro proceso; este componente no la crea.
+ *
+ * <p>La operación es idempotente: el mismo evento aplicado dos veces deja el
+ * sistema en el mismo estado, porque la evaluación se identifica por su clave
+ * en el sistema de origen y no por el hecho de haber llegado.
  */
 @Service
 @Transactional
@@ -50,7 +54,15 @@ public class EvaluacionSincronizacionService {
                                 + " para el periodo " + request.periodoAcademico()
                                 + ". El sincronizador de evaluaciones asume que la matrícula ya fue sincronizada."));
 
-        Evaluacion evaluacion = new Evaluacion();
+        // Si este evento ya se procesó antes, se actualiza la evaluación existente
+        // en vez de insertar otra. Reprocesar un evento es lo normal cuando la
+        // entrega es "al menos una vez" (SUP-09); sin esto, cada reintento sumaba
+        // una evaluación duplicada y distorsionaba la nota.
+        Evaluacion evaluacion = evaluacionRepository
+                .findByIdEvaluacionOrigen(request.idEvaluacionOrigen())
+                .orElseGet(Evaluacion::new);
+
+        evaluacion.setIdEvaluacionOrigen(request.idEvaluacionOrigen());
         evaluacion.setMatricula(matricula);
         evaluacion.setTipo(request.tipo());
         evaluacion.setNombre(request.nombre());

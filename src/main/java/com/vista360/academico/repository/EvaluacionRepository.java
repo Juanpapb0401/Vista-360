@@ -6,6 +6,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
+import java.util.Optional;
 
 public interface EvaluacionRepository extends JpaRepository<Evaluacion, Long> {
 
@@ -18,4 +19,10 @@ public interface EvaluacionRepository extends JpaRepository<Evaluacion, Long> {
      * conjunto completo, no una página.
      */
     List<Evaluacion> findByMatricula_Id(Long matriculaId);
+
+    /**
+     * Busca una evaluación por su identificador en el sistema de origen, para
+     * reconocer un evento ya procesado y no duplicarlo.
+     */
+    Optional<Evaluacion> findByIdEvaluacionOrigen(String idEvaluacionOrigen);
 }

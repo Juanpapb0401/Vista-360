@@ -19,6 +19,14 @@ import java.time.LocalDate;
  */
 public record EvaluacionSyncRequest(
 
+        /*
+         * Identificador de la evaluación en el sistema de origen. Es obligatorio
+         * porque sin él no hay forma de distinguir un reintento del mismo evento
+         * de una evaluación nueva, y la entrega es "al menos una vez" (SUP-09).
+         */
+        @NotBlank(message = "idEvaluacionOrigen es obligatorio")
+        String idEvaluacionOrigen,
+
         @NotBlank(message = "codigoEstudiante es obligatorio")
         String codigoEstudiante,
 
