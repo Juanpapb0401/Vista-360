@@ -23,6 +23,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
@@ -94,6 +95,7 @@ class EvaluacionSincronizacionServiceTest {
                 .findByEstudiante_CodigoEstudianteAndMateria_CodigoMateriaAndPeriodoAcademico_Codigo(
                         ESTUDIANTE, MATERIA, PERIODO))
                 .thenReturn(Optional.of(matricula));
+        when(evaluacionRepository.findByIdEvaluacionOrigen(any())).thenReturn(Optional.empty());
         when(evaluacionRepository.findByMatricula_Id(any()))
                 .thenReturn(List.of(evaluacion("3.00", "40.00")));
 
@@ -120,14 +122,41 @@ class EvaluacionSincronizacionServiceTest {
                 .findByEstudiante_CodigoEstudianteAndMateria_CodigoMateriaAndPeriodoAcademico_Codigo(
                         ESTUDIANTE, MATERIA, PERIODO))
                 .thenReturn(Optional.of(new Matricula()));
+        when(evaluacionRepository.findByIdEvaluacionOrigen(any())).thenReturn(Optional.empty());
         when(evaluacionRepository.findByMatricula_Id(any()))
                 .thenReturn(List.of(evaluacionesTrasGuardar));
 
         return servicio.sincronizar(peticion());
     }
 
+    @Test
+    @DisplayName("Reprocesar el mismo evento actualiza la evaluación, no la duplica")
+    void reprocesarElMismoEventoEsIdempotente() {
+        // La plataforma de integración entrega al menos una vez (SUP-09): el mismo
+        // evento puede llegar dos veces y no debe sumar una evaluación repetida.
+        Evaluacion yaRegistrada = evaluacion("2.00", "25.00");
+        yaRegistrada.setIdEvaluacionOrigen("ERP-EVAL-001");
+
+        when(matriculaRepository
+                .findByEstudiante_CodigoEstudianteAndMateria_CodigoMateriaAndPeriodoAcademico_Codigo(
+                        ESTUDIANTE, MATERIA, PERIODO))
+                .thenReturn(Optional.of(new Matricula()));
+        when(evaluacionRepository.findByIdEvaluacionOrigen("ERP-EVAL-001"))
+                .thenReturn(Optional.of(yaRegistrada));
+        when(evaluacionRepository.findByMatricula_Id(any()))
+                .thenReturn(List.of(yaRegistrada));
+
+        EvaluacionSyncResponse respuesta = servicio.sincronizar(peticion());
+
+        // Se reusó la fila existente, con los valores del evento reprocesado.
+        verify(evaluacionRepository).save(yaRegistrada);
+        assertThat(yaRegistrada.getValor()).isEqualByComparingTo("4.00");
+        assertThat(respuesta.totalEvaluacionesRegistradas()).isEqualTo(1);
+    }
+
     private EvaluacionSyncRequest peticion() {
         return new EvaluacionSyncRequest(
+                "ERP-EVAL-001",
                 ESTUDIANTE, MATERIA, PERIODO,
                 TipoEvaluacion.PARCIAL, "Parcial 1",
                 new BigDecimal("4.00"), new BigDecimal("25.00"),

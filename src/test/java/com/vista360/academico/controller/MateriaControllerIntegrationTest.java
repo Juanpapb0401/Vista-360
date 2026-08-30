@@ -1,5 +1,6 @@
 package com.vista360.academico.controller;
 
+import com.jayway.jsonpath.JsonPath;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -7,6 +8,10 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.util.HashSet;
+import java.util.Set;
+
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.nullValue;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
@@ -114,6 +119,53 @@ class MateriaControllerIntegrationTest {
                         .with(tokenDeEstudiante(ESTUDIANTE)))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.error").value("RECURSO_NO_ENCONTRADO"));
+    }
+
+    @Test
+    @DisplayName("Un parámetro con el tipo equivocado responde 400, no 500")
+    void parametroConTipoInvalido() throws Exception {
+        mockMvc.perform(get("/api/v1/estudiantes/{codigo}/materias", ESTUDIANTE)
+                        .param("page", "abc")
+                        .with(tokenDeEstudiante(ESTUDIANTE)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("PARAMETRO_INVALIDO"));
+    }
+
+    @Test
+    @DisplayName("Una ruta inexistente responde 404 con el formato del contrato, no 500")
+    void rutaInexistente() throws Exception {
+        mockMvc.perform(get("/api/v1/ruta-que-no-existe")
+                        .with(tokenDeEstudiante(ESTUDIANTE)))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.error").value("RECURSO_NO_ENCONTRADO"));
+    }
+
+    @Test
+    @DisplayName("Al paginar de a una, ninguna materia se repite ni se pierde")
+    void paginacionSinRepetirNiPerderFilas() throws Exception {
+        // El estudiante tiene tres materias en el periodo vigente. Recorriendo el
+        // listado de a una por página deben salir las tres, sin repeticiones: es
+        // lo que garantiza el orden explícito de la consulta.
+        Set<String> vistas = new HashSet<>();
+        for (int pagina = 0; pagina < 3; pagina++) {
+            String cuerpo = mockMvc.perform(get("/api/v1/estudiantes/{codigo}/materias", ESTUDIANTE)
+                            .param("page", String.valueOf(pagina))
+                            .param("size", "1")
+                            .with(tokenDeEstudiante(ESTUDIANTE)))
+                    .andExpect(status().isOk())
+                    .andReturn().getResponse().getContentAsString();
+            vistas.add(JsonPath.read(cuerpo, "$.materias.content[0].codigoMateria"));
+        }
+
+        assertThat(vistas).containsExactlyInAnyOrder("ING1234", "MAT2201", "ING2345");
+    }
+
+    @Test
+    @DisplayName("La salud del servicio responde sin autenticación")
+    void saludPublica() throws Exception {
+        mockMvc.perform(get("/actuator/health"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("UP"));
     }
 
     /** Token de usuario con el claim {@code rol} que espera AutorizacionHelper. */
