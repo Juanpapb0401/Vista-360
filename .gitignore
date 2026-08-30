@@ -1,0 +1,30 @@
+# Maven
+target/
+!.mvn/wrapper/maven-wrapper.jar
+.mvn/timing.properties
+
+# IDE
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+.settings/
+.project
+.classpath
+nbproject/private/
+
+# Sistema operativo
+.DS_Store
+Thumbs.db
+
+# Temporales de Office (el enunciado original venía en .docx)
+~$*
+
+# Logs
+*.log
+
+# NOTA: src/main/resources/keys/ NO se ignora a propósito. Son llaves RSA de
+# desarrollo, generadas solo para esta demo y sin ningún dato real detrás; se
+# versionan para que cualquiera pueda clonar el repositorio y correr el
+# servicio de inmediato sin generar su propio par de llaves.

@@ -1,0 +1,53 @@
+spring:
+  application:
+    name: servicio-academico
+
+  datasource:
+    # H2 en memoria para esta prueba técnica y para desarrollo local, en modo
+    # de compatibilidad PostgreSQL. En producción se reemplaza por PostgreSQL
+    # real; ver docs/03-modelo-datos.md.
+    url: jdbc:h2:mem:academico;DB_CLOSE_DELAY=-1;MODE=PostgreSQL
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: ""
+
+  jpa:
+    # El esquema lo controla Flyway (src/main/resources/db/migration), no Hibernate.
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: true
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+
+server:
+  port: 8080
+
+app:
+  security:
+    public-key-path: classpath:keys/dev-public.pem
+    private-key-path: classpath:keys/dev-private.pem
+
+logging:
+  level:
+    com.vista360.academico: DEBUG
+
+---
+# Perfil "dev": habilita el emisor de tokens de prueba (DevTokenController)
+# y la consola web de H2, para poder explorar el servicio de punta a punta
+# sin depender de una plataforma de identidad real. Se activa con
+# --spring.profiles.active=dev (ver README.md).
+spring:
+  config:
+    activate:
+      on-profile: dev
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+  jpa:
+    show-sql: true

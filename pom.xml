@@ -1,0 +1,142 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>3.3.4</version>
+        <relativePath/>
+    </parent>
+
+    <groupId>com.vista360</groupId>
+    <artifactId>servicio-academico</artifactId>
+    <version>0.1.0</version>
+    <name>servicio-academico</name>
+    <description>
+        Servicio Académico de Vista 360° del Estudiante (Universidad Icesi).
+        Dado el identificador de un estudiante, devuelve sus materias matriculadas
+        y sus notas actuales. Prueba técnica - Semillero Ingeniero de Arquitectura e Innovación.
+    </description>
+
+    <properties>
+        <java.version>21</java.version>
+        <!-- La versión de Lombok que gestiona Spring Boot 3.3.4 (1.18.34) no soporta
+             JDK 23: el procesador de anotaciones no genera getters/setters y la
+             compilación falla con "cannot find symbol". Se sube a una versión que
+             sí soporta JDK 23+, para poder compilar tanto con JDK 21 como con el
+             JDK más reciente que tenga la máquina. -->
+        <lombok.version>1.18.42</lombok.version>
+    </properties>
+
+    <dependencies>
+        <!-- Web / REST -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+
+        <!-- Persistencia -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-jpa</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-validation</artifactId>
+        </dependency>
+
+        <!-- Seguridad: validación de JWT como Resource Server -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-oauth2-resource-server</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-security</artifactId>
+        </dependency>
+
+        <!-- Nota: la emisión de tokens de prueba (solo perfil dev) usa nimbus-jose-jwt,
+             que llega transitivamente con spring-security-oauth2-jose a través del
+             starter de resource-server. No se declara aparte porque el BOM de Spring
+             Boot no gestiona su versión y fijarla a mano arriesga desalinearla de la
+             que espera Spring Security. -->
+
+        <!-- Migraciones de base de datos -->
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-core</artifactId>
+        </dependency>
+
+        <!-- Base de datos: H2 en memoria para desarrollo y para esta prueba técnica.
+             En producción se reemplaza por PostgreSQL; ver docs/03-modelo-datos.md. -->
+        <dependency>
+            <groupId>com.h2database</groupId>
+            <artifactId>h2</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+
+        <!-- Documentación OpenAPI / Swagger UI -->
+        <dependency>
+            <groupId>org.springdoc</groupId>
+            <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+            <version>2.6.0</version>
+        </dependency>
+
+        <!-- Reduce boilerplate en entidades y DTOs (getters/setters/constructores) -->
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <optional>true</optional>
+        </dependency>
+
+        <!-- Pruebas -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.security</groupId>
+            <artifactId>spring-security-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <!-- Desde JDK 23, javac ya no ejecuta procesadores de anotaciones de forma
+                 implícita: hay que declararlos. Sin esto, Lombok no genera getters ni
+                 setters y la compilación falla con "cannot find symbol". Se declara
+                 explícitamente para que el proyecto compile igual con JDK 21 o superior. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <annotationProcessorPaths>
+                        <path>
+                            <groupId>org.projectlombok</groupId>
+                            <artifactId>lombok</artifactId>
+                            <version>${lombok.version}</version>
+                        </path>
+                    </annotationProcessorPaths>
+                </configuration>
+            </plugin>
+
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <configuration>
+                    <excludes>
+                        <exclude>
+                            <groupId>org.projectlombok</groupId>
+                            <artifactId>lombok</artifactId>
+                        </exclude>
+                    </excludes>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>
