@@ -64,6 +64,15 @@
              Boot no gestiona su versión y fijarla a mano arriesga desalinearla de la
              que espera Spring Security. -->
 
+        <!-- Salud del servicio. La configuración de seguridad ya expone /actuator/health
+             como endpoint público y el README lo documenta; sin esta dependencia esa
+             ruta simplemente no existe. Es también la base mínima de observabilidad
+             que exige SUP-23. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+
         <!-- Migraciones de base de datos -->
         <dependency>
             <groupId>org.flywaydb</groupId>

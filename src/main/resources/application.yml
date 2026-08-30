@@ -27,6 +27,15 @@ spring:
 server:
   port: 8080
 
+management:
+  endpoints:
+    web:
+      exposure:
+        # Solo health. Los demás endpoints del actuator exponen información
+        # operativa (configuración, métricas, beans) que no hay razón para
+        # publicar en un servicio con datos académicos.
+        include: health
+
 app:
   security:
     public-key-path: classpath:keys/dev-public.pem
