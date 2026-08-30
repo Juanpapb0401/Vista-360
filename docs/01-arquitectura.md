@@ -76,10 +76,10 @@ flowchart TD
         DWH["Data Warehouse"]
     end
 
-    ERP -.->|evento: cambio condición académica| INT
+    ERP -.->|cambio condición académica| INT
     INT -.->|evento| CORE
-    CORE -.->|publica evento de acompañamiento| INT
-    ACAD -.->|sincroniza proyección académica| INT
+    CORE -.->|evento de acompañamiento| INT
+    ACAD -.->|sincroniza proyección| INT
     INT -.->|evento / batch de ingesta| DWH
 ```
 </details>
