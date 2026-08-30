@@ -29,6 +29,16 @@ Queda en `http://localhost:8080`. El perfil `dev` habilita dos cosas que no exis
 | Consola H2 | http://localhost:8080/h2-console (JDBC `jdbc:h2:mem:academico`, usuario `sa`, sin contraseña) |
 | Salud | http://localhost:8080/actuator/health |
 
+### Probar los endpoints con Postman
+
+En [`postman/`](postman/) hay una colección lista para importar, con los 28 casos del contrato agrupados por tema (autenticación, endpoints, idempotencia, seguridad, errores, operación). Cada petición trae pruebas automáticas, así que el Collection Runner muestra en verde o rojo si el servicio cumple lo que promete.
+
+También se puede correr sin abrir Postman, con la aplicación arriba:
+
+```bash
+npx newman run postman/vista360-servicio-academico.postman_collection.json
+```
+
 Pruebas: `mvn test` (23 pruebas: unitarias del recálculo de notas e integración de ambos endpoints, la autorización, los códigos de error del contrato y la idempotencia de la sincronización).
 
 > Este repositorio no incluye el wrapper de Maven; usa `mvn` directamente, o genéralo con `mvn wrapper:wrapper`.

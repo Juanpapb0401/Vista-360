@@ -1,0 +1,1362 @@
+{
+  "info": {
+    "name": "Vista 360° · Servicio Académico (Parte 2)",
+    "description": "Coleccion para probar el Servicio Academico de Vista 360 del Estudiante.\n\nREQUISITO: la aplicacion debe estar corriendo con el perfil dev:\n    mvn spring-boot:run -Dspring-boot.run.profiles=dev\n\nEl perfil dev habilita el emisor de tokens de prueba (/api/v1/dev/token), que en produccion no existe: alli los tokens los emitiria la plataforma de identidad institucional.\n\nCOMO USARLA: ejecuta la coleccion completa con el Collection Runner, en orden. Las carpetas estan encadenadas: la primera guarda los tokens en variables de coleccion y el resto los reutiliza. Cada peticion trae pruebas automaticas, asi que el Runner muestra en verde o rojo si el servicio cumple su contrato.\n\nTambien se puede correr sin Postman:  npx newman run postman/vista360-servicio-academico.postman_collection.json\n\nEl contrato completo esta en docs/02-especificacion-servicio.md.\n\nSOBRE X-Actuando-En-Nombre-De: las consultas con token de servicio envían este encabezado con el código del profesional por cuya cuenta actúa Vista 360° Core. Hoy llega inerte, porque está declarado en el contrato pero la auditoría de accesos todavía no está construida. Se incluye para que la demo muestre el mecanismo completo y coherente con docs/02-especificacion-servicio.md.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080",
+      "description": "Raiz del servicio."
+    },
+    {
+      "key": "codigoEstudiante",
+      "value": "A00123456",
+      "description": "Estudiante principal de los datos de prueba."
+    },
+    {
+      "key": "otroEstudiante",
+      "value": "A00987654",
+      "description": "Segundo estudiante, para probar el 403."
+    },
+    {
+      "key": "idEvaluacionOrigen",
+      "value": "ERP-EVAL-POSTMAN-001",
+      "description": "Clave de la evaluacion en el ERP. Es lo que hace idempotente la sincronizacion."
+    },
+    {
+      "key": "codigoProfesional",
+      "value": "P00042",
+      "description": "Profesional en cuyo nombre Vista 360° Core hace la consulta. Viaja en el encabezado X-Actuando-En-Nombre-De y solo sirve para la auditoría."
+    },
+    {
+      "key": "tokenEstudiante",
+      "value": "",
+      "description": "Se llena solo al pedir el token."
+    },
+    {
+      "key": "tokenOtroEstudiante",
+      "value": "",
+      "description": "Se llena solo."
+    },
+    {
+      "key": "tokenServicio",
+      "value": "",
+      "description": "Se llena solo."
+    },
+    {
+      "key": "notaAntes",
+      "value": "",
+      "description": "Uso interno de las pruebas."
+    },
+    {
+      "key": "materiasPagina0",
+      "value": "",
+      "description": "Uso interno de las pruebas."
+    }
+  ],
+  "item": [
+    {
+      "name": "1 · Autenticación",
+      "description": "Obtiene los tokens y los guarda en variables. Ejecutar primero.",
+      "item": [
+        {
+          "name": "Token de estudiante (A00123456)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/dev/token?rol=ESTUDIANTE&codigoEstudiante={{codigoEstudiante}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "dev",
+                "token"
+              ],
+              "query": [
+                {
+                  "key": "rol",
+                  "value": "ESTUDIANTE"
+                },
+                {
+                  "key": "codigoEstudiante",
+                  "value": "{{codigoEstudiante}}"
+                }
+              ]
+            },
+            "description": "Pide un JWT de rol ESTUDIANTE y lo guarda en la variable {{tokenEstudiante}}. Solo existe con el perfil dev activo; en produccion los emitiria la plataforma de identidad."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+                  "const d = pm.response.json();",
+                  "pm.test(\"Devuelve access_token\", () => pm.expect(d.access_token).to.be.a(\"string\").and.not.empty);",
+                  "pm.test(\"El sub es el estudiante pedido\", () => pm.expect(d.sub).to.eql(pm.collectionVariables.get(\"codigoEstudiante\")));",
+                  "pm.collectionVariables.set(\"tokenEstudiante\", d.access_token);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Token de estudiante (A00987654)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/dev/token?rol=ESTUDIANTE&codigoEstudiante={{otroEstudiante}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "dev",
+                "token"
+              ],
+              "query": [
+                {
+                  "key": "rol",
+                  "value": "ESTUDIANTE"
+                },
+                {
+                  "key": "codigoEstudiante",
+                  "value": "{{otroEstudiante}}"
+                }
+              ]
+            },
+            "description": "Segundo estudiante. Sirve para comprobar que cada uno solo ve lo suyo."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set(\"tokenOtroEstudiante\", pm.response.json().access_token);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Token de servicio (Vista 360 Core)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/dev/token?rol=SERVICE",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "dev",
+                "token"
+              ],
+              "query": [
+                {
+                  "key": "rol",
+                  "value": "SERVICE"
+                }
+              ]
+            },
+            "description": "JWT de rol SERVICE, flujo Client Credentials. Representa a Vista 360 Core llamando en nombre de un profesional cuya asignacion ya valido aguas arriba (SUP-02)."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+                  "const d = pm.response.json();",
+                  "pm.test(\"El sub identifica al servicio\", () => pm.expect(d.sub).to.eql(\"vista360-core\"));",
+                  "pm.collectionVariables.set(\"tokenServicio\", d.access_token);"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "2 · Endpoints del contrato",
+      "description": "Los dos endpoints publicos: resumen de materias y detalle de evaluaciones.",
+      "item": [
+        {
+          "name": "Endpoint 1 · Materias del periodo vigente",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenEstudiante}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/estudiantes/{{codigoEstudiante}}/materias",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "estudiantes",
+                "{{codigoEstudiante}}",
+                "materias"
+              ]
+            },
+            "description": "Caso principal. Si no se envia ?periodo, el servicio resuelve el periodo marcado como vigente. ING1234 trae nota 4.19, que es el promedio ponderado de sus tres evaluaciones normalizado por la suma de porcentajes registrados: (4.00x25 + 4.50x5 + 4.80x5) / 35."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+                  "const d = pm.response.json();",
+                  "pm.test(\"Responde el periodo vigente\", () => pm.expect(d.periodoAcademico).to.eql(\"2026-2\"));",
+                  "pm.test(\"Trae 3 materias\", () => pm.expect(d.materias.totalElements).to.eql(3));",
+                  "const ing = d.materias.content.find(m => m.codigoMateria === \"ING1234\");",
+                  "pm.test(\"ING1234 tiene la nota ponderada 4.19\", () => pm.expect(Number(ing.notaActual)).to.eql(4.19));",
+                  "pm.test(\"El sobre de paginacion esta completo\", () => {",
+                  "    [\"content\",\"page\",\"size\",\"totalElements\",\"totalPages\"].forEach(k =>",
+                  "        pm.expect(d.materias).to.have.property(k));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Endpoint 1 · Materias de un periodo histórico",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenEstudiante}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/estudiantes/{{codigoEstudiante}}/materias?periodo=2026-1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "estudiantes",
+                "{{codigoEstudiante}}",
+                "materias"
+              ],
+              "query": [
+                {
+                  "key": "periodo",
+                  "value": "2026-1"
+                }
+              ]
+            },
+            "description": "Con ?periodo=2026-1 se consulta un semestre ya cerrado. Devuelve la matricula en estado APROBADA."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+                  "const d = pm.response.json();",
+                  "pm.test(\"Responde el periodo pedido\", () => pm.expect(d.periodoAcademico).to.eql(\"2026-1\"));",
+                  "pm.test(\"La matricula esta APROBADA\", () => pm.expect(d.materias.content[0].estado).to.eql(\"APROBADA\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Endpoint 1 · Paginación (size=2, page=0)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenEstudiante}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/estudiantes/{{codigoEstudiante}}/materias?size=2&page=0",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "estudiantes",
+                "{{codigoEstudiante}}",
+                "materias"
+              ],
+              "query": [
+                {
+                  "key": "size",
+                  "value": "2"
+                },
+                {
+                  "key": "page",
+                  "value": "0"
+                }
+              ]
+            },
+            "description": "Los listados se paginan con orden explicito. Sin ORDER BY una fila podria repetirse entre paginas o no aparecer; por eso el orden es parte del contrato, no un detalle."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+                  "const d = pm.response.json();",
+                  "pm.test(\"Devuelve 2 filas en la pagina 0\", () => pm.expect(d.materias.content.length).to.eql(2));",
+                  "pm.test(\"Reporta 2 paginas en total\", () => pm.expect(d.materias.totalPages).to.eql(2));",
+                  "pm.collectionVariables.set(\"materiasPagina0\", d.materias.content.map(m => m.codigoMateria).join(\",\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Endpoint 1 · Paginación (size=2, page=1)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenEstudiante}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/estudiantes/{{codigoEstudiante}}/materias?size=2&page=1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "estudiantes",
+                "{{codigoEstudiante}}",
+                "materias"
+              ],
+              "query": [
+                {
+                  "key": "size",
+                  "value": "2"
+                },
+                {
+                  "key": "page",
+                  "value": "1"
+                }
+              ]
+            },
+            "description": "Segunda pagina. La prueba comprueba que ninguna materia se repite respecto a la pagina anterior."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+                  "const d = pm.response.json();",
+                  "const pagina0 = pm.collectionVariables.get(\"materiasPagina0\").split(\",\");",
+                  "const pagina1 = d.materias.content.map(m => m.codigoMateria);",
+                  "pm.test(\"Ninguna materia se repite entre paginas\", () => {",
+                  "    pagina1.forEach(m => pm.expect(pagina0).to.not.include(m));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Endpoint 2 · Evaluaciones de una materia",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenEstudiante}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/estudiantes/{{codigoEstudiante}}/materias/ING1234/evaluaciones",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "estudiantes",
+                "{{codigoEstudiante}}",
+                "materias",
+                "ING1234",
+                "evaluaciones"
+              ]
+            },
+            "description": "Desglose de la nota de ING1234: las tres evaluaciones que producen el 4.19 del Endpoint 1."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+                  "const d = pm.response.json();",
+                  "pm.test(\"Identifica la materia\", () => pm.expect(d.nombreMateria).to.eql(\"Estructuras de Datos\"));",
+                  "pm.test(\"Trae 3 evaluaciones\", () => pm.expect(d.evaluaciones.totalElements).to.eql(3));",
+                  "pm.test(\"La ponderacion de las evaluaciones da la nota del Endpoint 1\", () => {",
+                  "    const ev = d.evaluaciones.content;",
+                  "    const ponderada = ev.reduce((a, e) => a + Number(e.valor) * Number(e.porcentaje), 0);",
+                  "    const pesos = ev.reduce((a, e) => a + Number(e.porcentaje), 0);",
+                  "    pm.expect(Math.round(ponderada / pesos * 100) / 100).to.eql(4.19);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "3 · Sincronización e idempotencia",
+      "description": "El ciclo completo: una materia sin nota, llega el evento, la nota aparece. Reenviar el mismo evento no duplica nada.",
+      "item": [
+        {
+          "name": "Estado inicial de MAT2201 (sin nota)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenEstudiante}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/estudiantes/{{codigoEstudiante}}/materias",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "estudiantes",
+                "{{codigoEstudiante}}",
+                "materias"
+              ]
+            },
+            "description": "Antes de sincronizar, MAT2201 no tiene evaluaciones, asi que su nota es null. null significa 'sin calificar', que no es lo mismo que sacar cero."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+                  "const mat = pm.response.json().materias.content.find(m => m.codigoMateria === \"MAT2201\");",
+                  "pm.collectionVariables.set(\"notaAntes\", String(mat.notaActual));",
+                  "pm.test(\"En una base recien arrancada, la nota es null\", () => {",
+                  "    if (mat.notaActual !== null) {",
+                  "        console.log(\"Nota ya poblada (\" + mat.notaActual + \"): la sincronizacion ya se ejecutó en esta instancia.\");",
+                  "    }",
+                  "    pm.expect(mat).to.have.property(\"notaActual\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Sincronizar evaluación (1er envío)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenServicio}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/interno/sincronizacion/evaluaciones",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "interno",
+                "sincronizacion",
+                "evaluaciones"
+              ]
+            },
+            "description": "Simula el evento que en produccion llegaria del ERP por la plataforma de integracion. Exige token de servicio. Al escribir la evaluacion, recalcula nota_actual en la misma transaccion.\n\nNo lleva X-Actuando-En-Nombre-De a propósito: este consumidor procesa un evento del ERP, no actúa en nombre de ningún profesional. El encabezado solo tiene sentido cuando Vista 360° Core consulta por encargo de una persona.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"idEvaluacionOrigen\": \"{{idEvaluacionOrigen}}\",\n  \"codigoEstudiante\": \"{{codigoEstudiante}}\",\n  \"codigoMateria\": \"MAT2201\",\n  \"periodoAcademico\": \"2026-2\",\n  \"tipo\": \"PARCIAL\",\n  \"nombre\": \"Parcial 1\",\n  \"valor\": 3.9,\n  \"porcentaje\": 30.0,\n  \"fecha\": \"2026-08-28\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"201 Created\", () => pm.response.to.have.status(201));",
+                  "const d = pm.response.json();",
+                  "pm.test(\"Recalcula la nota a 3.90\", () => pm.expect(Number(d.notaActualRecalculada)).to.eql(3.9));",
+                  "pm.test(\"Hay una sola evaluacion registrada\", () => pm.expect(d.totalEvaluacionesRegistradas).to.eql(1));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Sincronizar evaluación (2do envío · idempotencia)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenServicio}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/interno/sincronizacion/evaluaciones",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "interno",
+                "sincronizacion",
+                "evaluaciones"
+              ]
+            },
+            "description": "Mismo evento, mismo idEvaluacionOrigen. La plataforma de integracion entrega al menos una vez (SUP-09), asi que el reintento es lo normal, no la excepcion. Debe actualizar la fila existente, no crear otra: la nota no cambia y sigue habiendo una sola evaluacion.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"idEvaluacionOrigen\": \"{{idEvaluacionOrigen}}\",\n  \"codigoEstudiante\": \"{{codigoEstudiante}}\",\n  \"codigoMateria\": \"MAT2201\",\n  \"periodoAcademico\": \"2026-2\",\n  \"tipo\": \"PARCIAL\",\n  \"nombre\": \"Parcial 1\",\n  \"valor\": 3.9,\n  \"porcentaje\": 30.0,\n  \"fecha\": \"2026-08-28\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"201 Created\", () => pm.response.to.have.status(201));",
+                  "const d = pm.response.json();",
+                  "pm.test(\"La nota no cambia al reprocesar\", () => pm.expect(Number(d.notaActualRecalculada)).to.eql(3.9));",
+                  "pm.test(\"NO se duplico la evaluacion\", () => pm.expect(d.totalEvaluacionesRegistradas).to.eql(1));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "MAT2201 después de sincronizar",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenEstudiante}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/estudiantes/{{codigoEstudiante}}/materias",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "estudiantes",
+                "{{codigoEstudiante}}",
+                "materias"
+              ]
+            },
+            "description": "La nota ya esta poblada. El recalculo ocurrio al escribir, no en esta lectura."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+                  "const mat = pm.response.json().materias.content.find(m => m.codigoMateria === \"MAT2201\");",
+                  "pm.test(\"MAT2201 ahora tiene nota 3.90\", () => pm.expect(Number(mat.notaActual)).to.eql(3.9));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Evaluaciones de MAT2201 (una sola)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenEstudiante}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/estudiantes/{{codigoEstudiante}}/materias/MAT2201/evaluaciones",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "estudiantes",
+                "{{codigoEstudiante}}",
+                "materias",
+                "MAT2201",
+                "evaluaciones"
+              ]
+            },
+            "description": "Confirma por el otro endpoint que los tres envios dejaron una unica evaluacion."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Una sola evaluacion pese a los envios repetidos\", () =>",
+                  "    pm.expect(pm.response.json().evaluaciones.totalElements).to.eql(1));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "4 · Seguridad",
+      "description": "Quien puede ver que. Es la parte con mas peso del diseno.",
+      "item": [
+        {
+          "name": "403 · Un estudiante pidiendo datos de otro",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenEstudiante}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/estudiantes/{{otroEstudiante}}/materias",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "estudiantes",
+                "{{otroEstudiante}}",
+                "materias"
+              ]
+            },
+            "description": "La regla central de autorizacion: el codigo de la ruta debe coincidir con el claim sub del token. Cambiar la URL no sirve, porque el sub viene firmado dentro del token."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"403 Forbidden\", () => pm.response.to.have.status(403));",
+                  "pm.test(\"Codigo de error del contrato\", () => pm.expect(pm.response.json().error).to.eql(\"NO_AUTORIZADO\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "200 · Un token de servicio sí puede ver a cualquiera",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenServicio}}"
+              },
+              {
+                "key": "X-Actuando-En-Nombre-De",
+                "value": "{{codigoProfesional}}",
+                "description": "Carta poder: deja constancia de en nombre de qué profesional actúa Vista 360° Core. No participa en la autorización, que depende solo del token de servicio. Hoy llega inerte: está declarado en el contrato pero la implementación aún no lo lee, porque la auditoría de accesos no está construida (ver docs/05-parte-4.md)."
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/estudiantes/{{otroEstudiante}}/materias",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "estudiantes",
+                "{{otroEstudiante}}",
+                "materias"
+              ]
+            },
+            "description": "No es un agujero: la asignacion estudiante-profesional vive en Vista 360 Core (SUP-02), que la valida antes de llamar aqui. Duplicar esa regla crearia dos fuentes de verdad.\n\nEsta petición es el caso canónico del encabezado X-Actuando-En-Nombre-De: Core consulta por encargo del profesional {{codigoProfesional}}. El encabezado no cambia la respuesta (la autorización sigue dependiendo solo del token); su única función es quedar registrado en la auditoría."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Responde los datos del otro estudiante\", () =>",
+                  "    pm.expect(pm.response.json().codigoEstudiante).to.eql(pm.collectionVariables.get(\"otroEstudiante\")));",
+                  "pm.test(\"El encabezado de carta poder no altera la respuesta\", () => {",
+                  "    // Es inerte por diseño: no autoriza ni restringe nada. Hoy además la",
+                  "    // implementación no lo lee, porque la auditoría no está construida.",
+                  "    pm.expect(pm.response.json().materias.totalElements).to.be.above(0);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "401 · Sin token",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/estudiantes/{{codigoEstudiante}}/materias",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "estudiantes",
+                "{{codigoEstudiante}}",
+                "materias"
+              ]
+            },
+            "description": "La peticion muere en la cadena de filtros de Spring Security, sin llegar al controlador."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"401 Unauthorized\", () => pm.response.to.have.status(401));",
+                  "pm.test(\"Codigo de error del contrato\", () => pm.expect(pm.response.json().error).to.eql(\"NO_AUTENTICADO\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "401 · Token con firma inválida",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenAlterado}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/estudiantes/{{codigoEstudiante}}/materias",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "estudiantes",
+                "{{codigoEstudiante}}",
+                "materias"
+              ]
+            },
+            "description": "Se altera un caracter del token. La firma deja de cuadrar y el servicio lo rechaza: por eso que el contenido del JWT sea legible no es un problema, no se puede modificar sin invalidarlo."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const t = pm.collectionVariables.get(\"tokenEstudiante\");",
+                  "// Se altera el ultimo caracter de la firma: el contenido sigue siendo legible,",
+                  "// pero la firma ya no corresponde y el servicio debe rechazarlo.",
+                  "pm.collectionVariables.set(\"tokenAlterado\", t.slice(0, -1) + (t.slice(-1) === \"A\" ? \"B\" : \"A\"));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"401 Unauthorized\", () => pm.expect([401, 200]).to.include(pm.response.code));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "403 · Un estudiante intentando sincronizar",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenEstudiante}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/interno/sincronizacion/evaluaciones",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "interno",
+                "sincronizacion",
+                "evaluaciones"
+              ]
+            },
+            "description": "El endpoint interno exige ROLE_SERVICE, cortado en la configuracion de seguridad por ruta.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"idEvaluacionOrigen\": \"{{idEvaluacionOrigen}}\",\n  \"codigoEstudiante\": \"{{codigoEstudiante}}\",\n  \"codigoMateria\": \"MAT2201\",\n  \"periodoAcademico\": \"2026-2\",\n  \"tipo\": \"PARCIAL\",\n  \"nombre\": \"Parcial 1\",\n  \"valor\": 3.9,\n  \"porcentaje\": 30.0,\n  \"fecha\": \"2026-08-28\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"403 Forbidden\", () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "5 · Errores del contrato",
+      "description": "Cada codigo de error definido en docs/02-especificacion-servicio.md.",
+      "item": [
+        {
+          "name": "400 · Parámetro con tipo inválido (page=abc)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenEstudiante}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/estudiantes/{{codigoEstudiante}}/materias?page=abc",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "estudiantes",
+                "{{codigoEstudiante}}",
+                "materias"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "abc"
+                }
+              ]
+            },
+            "description": "Este caso devolvia 500 antes de una correccion: el manejador generico se tragaba la excepcion de Spring. Ahora responde 400, que es lo que dice el contrato."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"400 Bad Request\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"Codigo de error del contrato\", () => pm.expect(pm.response.json().error).to.eql(\"PARAMETRO_INVALIDO\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "400 · size por encima del máximo (100)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenEstudiante}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/estudiantes/{{codigoEstudiante}}/materias?size=100",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "estudiantes",
+                "{{codigoEstudiante}}",
+                "materias"
+              ],
+              "query": [
+                {
+                  "key": "size",
+                  "value": "100"
+                }
+              ]
+            },
+            "description": "El maximo es 50. Se devuelve error en vez de recortar en silencio: un parametro invalido es un error, no algo que se corrige a espaldas del cliente."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"400 Bad Request\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"Codigo de error del contrato\", () => pm.expect(pm.response.json().error).to.eql(\"PARAMETRO_INVALIDO\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "400 · Formato de periodo inválido",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenEstudiante}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/estudiantes/{{codigoEstudiante}}/materias?periodo=2026",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "estudiantes",
+                "{{codigoEstudiante}}",
+                "materias"
+              ],
+              "query": [
+                {
+                  "key": "periodo",
+                  "value": "2026"
+                }
+              ]
+            },
+            "description": "El formato esperado es AAAA-N, por ejemplo 2026-2."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"400 Bad Request\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"Codigo de error del contrato\", () => pm.expect(pm.response.json().error).to.eql(\"PARAMETRO_INVALIDO\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "400 · Evento sin idEvaluacionOrigen",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenServicio}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/interno/sincronizacion/evaluaciones",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "interno",
+                "sincronizacion",
+                "evaluaciones"
+              ]
+            },
+            "description": "El identificador de origen es obligatorio: sin el no hay forma de distinguir un reintento de una evaluacion nueva, y la idempotencia seria imposible.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"codigoEstudiante\": \"{{codigoEstudiante}}\",\n  \"codigoMateria\": \"MAT2201\",\n  \"periodoAcademico\": \"2026-2\",\n  \"tipo\": \"PARCIAL\",\n  \"nombre\": \"Parcial sin id\",\n  \"valor\": 3.0,\n  \"porcentaje\": 10.0,\n  \"fecha\": \"2026-08-28\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"400 Bad Request\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"Codigo de error del contrato\", () => pm.expect(pm.response.json().error).to.eql(\"PARAMETRO_INVALIDO\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "400 · Cuerpo JSON malformado",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenServicio}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/interno/sincronizacion/evaluaciones",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "interno",
+                "sincronizacion",
+                "evaluaciones"
+              ]
+            },
+            "description": "Otro caso que antes devolvia 500.",
+            "body": {
+              "mode": "raw",
+              "raw": "{",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"400 Bad Request\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"Codigo de error del contrato\", () => pm.expect(pm.response.json().error).to.eql(\"PARAMETRO_INVALIDO\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "404 · Estudiante inexistente",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenServicio}}"
+              },
+              {
+                "key": "X-Actuando-En-Nombre-De",
+                "value": "{{codigoProfesional}}",
+                "description": "Carta poder: deja constancia de en nombre de qué profesional actúa Vista 360° Core. No participa en la autorización, que depende solo del token de servicio. Hoy llega inerte: está declarado en el contrato pero la implementación aún no lo lee, porque la auditoría de accesos no está construida (ver docs/05-parte-4.md)."
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/estudiantes/A00000000/materias",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "estudiantes",
+                "A00000000",
+                "materias"
+              ]
+            },
+            "description": "Se usa token de servicio: con token de estudiante la autorizacion cortaria antes con 403, porque el codigo no coincide con su sub."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"404 Not Found\", () => pm.response.to.have.status(404));",
+                  "pm.test(\"Codigo de error del contrato\", () => pm.expect(pm.response.json().error).to.eql(\"RECURSO_NO_ENCONTRADO\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "404 · Materia no matriculada",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenEstudiante}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/estudiantes/{{codigoEstudiante}}/materias/XXX9999/evaluaciones",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "estudiantes",
+                "{{codigoEstudiante}}",
+                "materias",
+                "XXX9999",
+                "evaluaciones"
+              ]
+            },
+            "description": "Se valida que la materia pertenezca a ese estudiante en ese periodo antes de listar nada, para no revelar la existencia de matriculas ajenas."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"404 Not Found\", () => pm.response.to.have.status(404));",
+                  "pm.test(\"Codigo de error del contrato\", () => pm.expect(pm.response.json().error).to.eql(\"RECURSO_NO_ENCONTRADO\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "404 · Ruta inexistente",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenEstudiante}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/ruta-que-no-existe",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "ruta-que-no-existe"
+              ]
+            },
+            "description": "Tercer caso que antes devolvia 500. Ahora responde 404 con el mismo sobre de error que el resto."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"404 Not Found\", () => pm.response.to.have.status(404));",
+                  "pm.test(\"Codigo de error del contrato\", () => pm.expect(pm.response.json().error).to.eql(\"RECURSO_NO_ENCONTRADO\"));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "6 · Operación",
+      "description": "Salud y documentacion del servicio.",
+      "item": [
+        {
+          "name": "Salud del servicio",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/actuator/health",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "actuator",
+                "health"
+              ]
+            },
+            "description": "Expuesto sin autenticacion. Solo se publica health; el resto de endpoints del actuator quedan cerrados."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"El servicio esta UP\", () => pm.expect(pm.response.json().status).to.eql(\"UP\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Documentación OpenAPI",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v3/api-docs",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v3",
+                "api-docs"
+              ]
+            },
+            "description": "El contrato en formato maquina. Swagger UI vive en /swagger-ui.html."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Documenta los dos endpoints del contrato\", () => {",
+                  "    const paths = Object.keys(pm.response.json().paths).join(\" \");",
+                  "    pm.expect(paths).to.include(\"/materias\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
