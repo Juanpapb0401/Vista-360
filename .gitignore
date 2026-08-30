@@ -28,3 +28,7 @@ Thumbs.db
 # desarrollo, generadas solo para esta demo y sin ningún dato real detrás; se
 # versionan para que cualquiera pueda clonar el repositorio y correr el
 # servicio de inmediato sin generar su propio par de llaves.
+
+# Guía de estudio del código, material personal para preparar la sustentación.
+# No forma parte de la entrega.
+GUIA-CODIGO.md

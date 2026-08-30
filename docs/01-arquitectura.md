@@ -110,84 +110,18 @@ Un detalle que el diagrama no muestra por claridad: tanto Vista 360° Core como 
 | Vista 360° Core (Agregación) a ERP, LMS | Síncrono, vía plataforma de integración | Datos que se piden bajo demanda para armar la vista consolidada. |
 | Vista 360° Core (Agregación) a ERP, dato financiero | Síncrono, en vivo, sin caché | SUP-14, la corrección pesa más que la latencia en este dato puntual. |
 | Servicio Académico a ERP | Asíncrono, eventos vía plataforma de integración, o consulta periódica si el ERP no emite eventos | Es sincronización de una proyección propia, no una respuesta esperada en pantalla, evita golpear al ERP en cada lectura. |
-| ERP a Vista 360° Core (Acompañamiento) y a Data warehouse, ante cambio de condición académica | Asíncrono, evento con múltiples suscriptores | Ver Escenario B de la Parte 3, un solo evento, varios interesados, desacopla al ERP de saber quién consume el cambio. |
+| ERP a Vista 360° Core (Acompañamiento) y a Data warehouse, ante cambio de condición académica | Asíncrono, evento con múltiples suscriptores | Ver Escenario B de la Parte 3 en `04-parte-3.md`, un solo evento, varios interesados, desacopla al ERP de saber quién consume el cambio. |
 | Vista 360° Core y Servicio Académico a Data warehouse | Asíncrono, evento o exportación periódica | SUP-12, Vista 360° no escribe directo al modelo dimensional, solo publica. |
 | Todos los servicios con la Plataforma de identidad | Validación local de JWT por firma | Cada servicio valida el token que recibe, sin llamada de red por petición (SUP-06). |
 
-## Escenario A de la Parte 3: estado financiero en tiempo real
+## Escenarios de comunicación (Parte 3.2)
 
-![Consulta del estado financiero en vivo](img/03-escenario-financiero.png)
-
-<details>
-<summary>Código fuente del diagrama</summary>
-
-```mermaid
-sequenceDiagram
-    actor EST as Estudiante
-    participant FE as Frontend Vista 360°
-    participant INT as Plataforma de Integración
-    participant CORE as Vista 360° Core (Agregación)
-    participant ERP as ERP Institucional
-
-    EST->>FE: Abre Vista 360°, sección financiera
-    FE->>INT: GET /estudiantes/{id}/financiero (Bearer JWT)
-    INT->>CORE: Reenvía solicitud (JWT ya validado en la puerta de enlace)
-    CORE->>CORE: Valida autorización (id del token = id solicitado)
-    CORE->>INT: Solicita saldo en vivo
-    INT->>ERP: Consulta saldo (solo lectura, sin caché)
-
-    alt ERP responde a tiempo
-        ERP-->>INT: Saldo actual
-        INT-->>CORE: Saldo actual
-        CORE-->>INT: Respuesta consolidada (200 OK)
-    else Timeout o ERP no disponible
-        INT--xCORE: Timeout
-        CORE-->>INT: Error explícito, sección financiera no disponible
-    end
-
-    INT-->>FE: Respuesta (dato o error parcial)
-    FE-->>EST: Muestra saldo, o aviso claro de que no se pudo cargar
-```
-</details>
-
-La consulta se resuelve en vivo contra el ERP porque un saldo desactualizado tiene consecuencias reales para el estudiante (SUP-14). Si el ERP no responde a tiempo, la sección financiera se marca como no disponible de forma explícita, en vez de mostrar un dato viejo o dejar la pantalla en blanco sin explicación (SUP-21). Este mismo mecanismo es el que se detalla como respuesta al Escenario A de la Parte 4.
-
-## Escenario B de la Parte 3: cambio de condición académica
-
-![Propagación del cambio de condición académica](img/04-escenario-condicion-academica.png)
-
-<details>
-<summary>Código fuente del diagrama</summary>
-
-```mermaid
-sequenceDiagram
-    participant ERP as ERP Institucional
-    participant INT as Plataforma de Integración
-    participant CORE as Vista 360° Core (Acompañamiento)
-    participant PROF as Profesional asignado
-    participant DWH as Data Warehouse
-
-    ERP->>INT: Publica evento CondicionAcademicaCambiada(estudiante_id, nueva_condición)
-
-    par Consumidor: Acompañamiento
-        INT->>CORE: Entrega evento
-        CORE->>CORE: Genera alerta automática, la asocia al profesional asignado
-        CORE->>PROF: Notifica (correo o in-app)
-    and Consumidor: Analítica
-        INT->>DWH: Entrega evento (ingesta)
-        DWH->>DWH: Actualiza el modelo analítico
-    end
-
-    PROF->>CORE: Consulta el detalle de la alerta en Vista 360°
-```
-</details>
-
-El ERP publica un único evento y la plataforma de integración lo entrega a todos los interesados, sin que el ERP necesite saber quién los consume (SUP-09, SUP-10). Esto es lo que permite "actuar de forma temprana": la alerta llega al profesional asignado sin depender de que alguien revise el ERP manualmente, y el data warehouse queda sincronizado por el mismo evento, no por un proceso aparte.
+Los dos escenarios de comunicación que pide la Parte 3 (consulta del estado financiero en tiempo real, y propagación de un cambio de condición académica) se resuelven con este mismo diseño de comunicación síncrona/asíncrona. Su desarrollo completo, con los diagramas de secuencia y la argumentación, está en [`04-parte-3.md`](04-parte-3.md).
 
 ## Decisiones clave de esta parte
 
 1. **Dos piezas desplegables, no una ni varias** (SUP-05b): Servicio Académico como microservicio propio, Vista 360° Core como monolito modular. La escala de Icesi (~10.000 estudiantes, SUP-20) no justifica el costo de operar más piezas distribuidas.
 2. **La plataforma de integración es la única puerta de salida hacia el ERP y el LMS.** Ninguna aplicación de Vista 360° les habla directo. Esto contiene el impacto de cualquier cambio en esos sistemas y centraliza la protección de sus APIs.
 3. **Vista 360° nunca accede directo a la base de datos del ERP** (SUP-08). Donde no hay API, hay un adaptador dedicado detrás de la plataforma de integración.
-4. **Lo síncrono es para lo que el usuario espera ver en pantalla; lo asíncrono es para propagar cambios.** Esta separación es la que resuelve limpio los dos escenarios de comunicación de la Parte 3.
+4. **Lo síncrono es para lo que el usuario espera ver en pantalla; lo asíncrono es para propagar cambios.** Esta separación es la que resuelve limpio los dos escenarios de comunicación de la Parte 3, desarrollados en [`04-parte-3.md`](04-parte-3.md).
 5. **El dato financiero nunca se cachea; el resto sí, con ventanas distintas según su volatilidad** (SUP-14, SUP-15).

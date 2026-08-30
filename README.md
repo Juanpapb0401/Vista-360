@@ -4,7 +4,9 @@ Servicio REST que, dado el identificador de un estudiante, devuelve **sus materi
 
 - **Contrato del servicio**: [`docs/02-especificacion-servicio.md`](docs/02-especificacion-servicio.md)
 - **Modelo de datos**: [`docs/03-modelo-datos.md`](docs/03-modelo-datos.md)
-- **Arquitectura general**: [`docs/01-arquitectura.md`](docs/01-arquitectura.md)
+- **Arquitectura general (Parte 1)**: [`docs/01-arquitectura.md`](docs/01-arquitectura.md)
+- **Seguridad y comunicación (Parte 3)**: [`docs/04-parte-3.md`](docs/04-parte-3.md)
+- **Operación y calidad (Parte 4)**: [`docs/05-parte-4.md`](docs/05-parte-4.md)
 - **Supuestos declarados** (SUP-01 a SUP-24, referenciados desde el código): [`docs/00-supuestos.md`](docs/00-supuestos.md)
 
 ## Stack
