@@ -5,6 +5,7 @@ import com.vista360.academico.service.AutorizacionHelper;
 import com.vista360.academico.service.MateriaConsultaService;
 import com.vista360.academico.service.PaginacionValidator;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -18,6 +19,9 @@ import org.springframework.web.bind.annotation.RestController;
  */
 @RestController
 public class MateriaController {
+
+    /** Orden estable del listado: el código de la materia es único dentro de un periodo. */
+    private static final Sort ORDEN = Sort.by("materia.codigoMateria");
 
     private final MateriaConsultaService materiaConsultaService;
     private final AutorizacionHelper autorizacionHelper;
@@ -40,7 +44,7 @@ public class MateriaController {
             @AuthenticationPrincipal Jwt token
     ) {
         autorizacionHelper.verificarAccesoAEstudiante(token, codigoEstudiante);
-        Pageable pageable = paginacionValidator.resolver(page, size);
+        Pageable pageable = paginacionValidator.resolver(page, size, ORDEN);
         return materiaConsultaService.obtenerResumen(codigoEstudiante, periodo, pageable);
     }
 }

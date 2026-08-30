@@ -5,6 +5,7 @@ import com.vista360.academico.service.AutorizacionHelper;
 import com.vista360.academico.service.EvaluacionConsultaService;
 import com.vista360.academico.service.PaginacionValidator;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -18,6 +19,13 @@ import org.springframework.web.bind.annotation.RestController;
  */
 @RestController
 public class EvaluacionController {
+
+    /**
+     * Las evaluaciones se listan en orden cronológico, que es como el estudiante
+     * espera leerlas. El id desempata: dos evaluaciones pueden compartir fecha, y
+     * sin desempate el orden entre ellas no estaría garantizado entre páginas.
+     */
+    private static final Sort ORDEN = Sort.by("fecha").ascending().and(Sort.by("id").ascending());
 
     private final EvaluacionConsultaService evaluacionConsultaService;
     private final AutorizacionHelper autorizacionHelper;
@@ -41,7 +49,7 @@ public class EvaluacionController {
             @AuthenticationPrincipal Jwt token
     ) {
         autorizacionHelper.verificarAccesoAEstudiante(token, codigoEstudiante);
-        Pageable pageable = paginacionValidator.resolver(page, size);
+        Pageable pageable = paginacionValidator.resolver(page, size, ORDEN);
         return evaluacionConsultaService.obtenerEvaluaciones(codigoEstudiante, codigoMateria, periodo, pageable);
     }
 }
