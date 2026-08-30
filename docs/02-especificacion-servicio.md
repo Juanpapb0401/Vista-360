@@ -34,6 +34,7 @@ GET /api/v1/estudiantes/{codigoEstudiante}/materias
 | Encabezado | Descripción |
 |---|---|
 | `Authorization` | `Bearer <JWT>`, obligatorio. |
+| `X-Actuando-En-Nombre-De` | Opcional. Solo aplica cuando quien llama presenta un token de servicio (`rol=SERVICE`): lleva el código del profesional en cuyo nombre se hace la consulta, para trazabilidad. Ver el diseño completo en `04-parte-3.md`. **Declarado en el diseño de seguridad, no leído todavía por esta implementación** (no hay auditoría de accesos construida aún, ver `05-parte-4.md`); si llega, hoy se ignora sin afectar la respuesta. |
 
 ### Respuesta exitosa
 

@@ -30,11 +30,29 @@ El Frontend nunca le habla directo al ERP, al LMS, ni a la base de datos de ning
 
 Cuando un servicio le habla a otro (Vista 360° Core llamando al Servicio Académico, por ejemplo), usa un token de servicio propio, no reenvía el token del usuario final. Esto tiene dos beneficios: el servicio receptor no necesita dos mecanismos de autorización distintos según quién llama (siempre valida un JWT con un `rol`, sea de usuario o de servicio), y la relación de confianza entre servicios queda explícita y auditable, en vez de ser un reenvío implícito de credenciales ajenas.
 
+### Cómo no se pierde de vista quién disparó la consulta original
+
+Usar un token de servicio genérico tiene una consecuencia que hay que resolver aparte: el Servicio Académico, al recibir ese token, sabe que quien pregunta es "Vista 360° Core", pero no sabe **en nombre de qué profesional puntual** se está haciendo esa consulta. Y esa información sí hace falta, porque el registro de auditoría de la Parte 4 (Escenario B) debe poder responder "¿qué profesional consultó a este estudiante?", no solo "¿qué servicio lo consultó?".
+
+La solución no toca el mecanismo de autorización, que sigue dependiendo únicamente del token de servicio, y no se complica con un intercambio de tokens (la alternativa más rigurosa, llamada *Token Exchange*, donde el token mismo llevaría la identidad original incrustada). En vez de eso, Vista 360° Core añade un dato adicional a la petición, un encabezado HTTP (`X-Actuando-En-Nombre-De: <código del profesional>`), puramente informativo.
+
+Dos reglas hacen que esto sea seguro y no un atajo peligroso:
+
+- **Este encabezado nunca participa en la decisión de autorización.** El Servicio Académico sigue autorizando solo con base en el `rol` del token (`SERVICE` accede a cualquier estudiante, como ya se definió). El encabezado no habilita ni restringe nada por sí mismo; si llegara vacío o ausente, la petición se sigue resolviendo igual.
+- **Se usa exclusivamente para quedar registrado en la auditoría.** El Servicio Académico lo toma y lo guarda junto con el resto del registro de acceso (quién, qué, cuándo), como el dato de "en representación de quién" se hizo esa consulta puntual.
+
+Es la misma idea que una carta poder en un trámite bancario: el cajero no valida la identidad de quien firma contra la carta, esa validación ya se hizo antes; pero sí anota en el registro quién actuó en nombre de quién, para que quede constancia.
+
+**El límite honesto de este mecanismo.** El encabezado es un dato que Vista 360° Core *afirma*, no algo que el Servicio Académico *verifica*. Si el token de servicio de Core llegara a verse comprometido, quien lo explote no solo podría leer la información de cualquier estudiante, también podría escribir cualquier código de profesional en ese encabezado. El registro de auditoría del Servicio Académico, en ese caso, quedaría atribuyendo el acceso a una persona que nunca lo hizo.
+
+Dicho de otra forma: el registro del Servicio Académico prueba "Core afirmó que actuaba en nombre de X", no "X consultó de verdad". Para responder con la certeza que exige el Escenario B de la Parte 4, no basta ese registro solo: hace falta cruzarlo con el propio registro de acceso de Vista 360° Core, que sí autenticó al profesional con su token de usuario en el primer salto. Es la misma lógica de correlación que ya se usa para cruzar el registro de acceso con la asignación vigente en la fecha del reclamo (ver `05-parte-4.md`), aplicada ahora a la identidad en sí, no solo al permiso.
+
 ### Supuestos declarados para esta parte
 
 - **Los tokens de usuario son de corta duración** (del orden de una hora), con renovación silenciosa a través del flujo estándar de OIDC. No se declara un mecanismo de revocación inmediata (como una lista de tokens revocados) porque, a esta escala y con esta duración corta, el costo de construirlo no se justifica frente al riesgo que mitiga; si la Universidad lo exige por política, se añade sin cambiar el resto del diseño.
 - **Los tokens de servicio (Client Credentials) se emiten por cliente registrado**, no por instancia de máquina. Cada servicio que necesita llamar a otro tiene sus propias credenciales de cliente en la plataforma de identidad, y esas credenciales pueden rotarse o revocarse sin afectar a los demás.
 - **No se exige mTLS entre servicios internos.** La combinación de JWT firmado más una red interna segmentada es suficiente a esta escala; mTLS añadiría un costo operativo de gestión de certificados que no está justificado por el nivel de riesgo actual. Si el ecosistema creciera o el criterio de la Universidad lo exigiera, es una capa que se añade sin rediseñar la autorización.
+- **El encabezado `X-Actuando-En-Nombre-De` es de confianza porque solo lo puede enviar quien ya tiene un token de servicio válido**, es decir, Vista 360° Core, un cliente registrado y de confianza. No es un dato que un usuario final pueda inyectar directamente; si en algún momento se expusiera un canal donde eso fuera posible, el encabezado tendría que dejar de usarse sin verificación adicional, precisamente porque nunca participa en la autorización, solo en la auditoría.
 
 ## 3.2 Comunicación
 
