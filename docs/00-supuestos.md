@@ -207,4 +207,13 @@ Si tuviera una sola reunión con la Universidad antes de construir, preguntaría
 
 ## Nota sobre el uso de herramientas de inteligencia artificial
 
-*(Pendiente de completar al cierre del ejercicio, según lo solicitado en las instrucciones generales: qué herramienta se usó, en qué partes y con qué propósito.)*
+Las instrucciones generales piden declarar qué herramienta se usó, en qué partes y con qué propósito. Se usó **Claude (Anthropic)**, en dos modalidades y con propósitos distintos:
+
+| Parte | Modalidad | Para qué |
+|---|---|---|
+| Partes 1, 3 y 4 (diseño) | Claude en conversación | Contrastar alternativas de arquitectura, presionar sobre cada supuesto hasta dejarlo declarado con su justificación y su impacto si resultara falso, y redactar estos documentos. |
+| Parte 2 (implementación) | Claude Code | Generar el código a partir del contrato ya escrito, escribir las pruebas, y depurar los errores reales que aparecieron al compilar y ejecutar por primera vez. |
+
+**Qué aportó la herramienta y qué no.** Las decisiones de fondo son propias y están argumentadas en estos documentos: separar la solución en dos piezas desplegables en vez de fragmentarla en microservicios (SUP-05b), materializar la nota consolidada en vez de calcularla al leer, repartir la autorización entre Vista 360° Core y el Servicio Académico según quién es dueño de cada dato (SUP-02), y consultar el dato financiero en vivo mientras el resto tolera caché (SUP-14, SUP-15). La IA sirvió para buscarles los puntos débiles y para acelerar la redacción y la depuración, no para tomarlas.
+
+**Dónde fue más útil de forma concreta:** encontrar defectos que no eran visibles leyendo el código. Al auditar la implementación aparecieron seis, entre ellos un manejador de excepciones que convertía errores del cliente en respuestas `500` contradiciendo el contrato y ocultaba las trazas del log, y una paginación sin orden explícito que podía repetir u omitir filas entre páginas. Ambos están corregidos y cubiertos con pruebas.

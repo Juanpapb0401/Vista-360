@@ -10,6 +10,11 @@ Se presenta en dos vistas separadas, en vez de una sola con todo mezclado, porqu
 
 ### Vista 1: flujo síncrono (consultas del usuario)
 
+![Flujo síncrono de Vista 360°](img/01-flujo-sincrono.png)
+
+<details>
+<summary>Código fuente del diagrama</summary>
+
 ```mermaid
 flowchart TD
     subgraph USR["Usuarios"]
@@ -45,8 +50,14 @@ flowchart TD
     INT -->|REST, solo lectura| ERP
     INT -->|REST| LMS
 ```
+</details>
 
 ### Vista 2: flujo asíncrono (eventos y sincronización de fondo)
+
+![Flujo asíncrono de Vista 360°](img/02-flujo-asincrono.png)
+
+<details>
+<summary>Código fuente del diagrama</summary>
 
 ```mermaid
 flowchart TD
@@ -71,6 +82,7 @@ flowchart TD
     ACAD -.->|sincroniza proyección académica| INT
     INT -.->|evento / batch de ingesta| DWH
 ```
+</details>
 
 **Cómo leer ambas vistas:** línea sólida es comunicación síncrona (pido y espero respuesta); línea punteada es comunicación asíncrona (evento o sincronización de fondo). En la Vista 1, todo el tráfico síncrono hacia sistemas externos pasa por la Plataforma de Integración como puerta de enlace única, en vez de que cada aplicación de Vista 360° hable directo con el ERP o el LMS. Esa decisión centraliza en un solo punto la protección de esas APIs y contiene el impacto si el ERP cambia un endpoint. La Vista 2 muestra por separado el otro tipo de tráfico, el que nadie está esperando en pantalla, el ERP avisa que algo cambió, y Vista 360° Core y el Servicio Académico se mantienen al día o publican sus propios cambios sin bloquear a ningún usuario.
 
@@ -104,6 +116,11 @@ Un detalle que el diagrama no muestra por claridad: tanto Vista 360° Core como 
 
 ## Escenario A de la Parte 3: estado financiero en tiempo real
 
+![Consulta del estado financiero en vivo](img/03-escenario-financiero.png)
+
+<details>
+<summary>Código fuente del diagrama</summary>
+
 ```mermaid
 sequenceDiagram
     actor EST as Estudiante
@@ -131,10 +148,16 @@ sequenceDiagram
     INT-->>FE: Respuesta (dato o error parcial)
     FE-->>EST: Muestra saldo, o aviso claro de que no se pudo cargar
 ```
+</details>
 
 La consulta se resuelve en vivo contra el ERP porque un saldo desactualizado tiene consecuencias reales para el estudiante (SUP-14). Si el ERP no responde a tiempo, la sección financiera se marca como no disponible de forma explícita, en vez de mostrar un dato viejo o dejar la pantalla en blanco sin explicación (SUP-21). Este mismo mecanismo es el que se detalla como respuesta al Escenario A de la Parte 4.
 
 ## Escenario B de la Parte 3: cambio de condición académica
+
+![Propagación del cambio de condición académica](img/04-escenario-condicion-academica.png)
+
+<details>
+<summary>Código fuente del diagrama</summary>
 
 ```mermaid
 sequenceDiagram
@@ -157,6 +180,7 @@ sequenceDiagram
 
     PROF->>CORE: Consulta el detalle de la alerta en Vista 360°
 ```
+</details>
 
 El ERP publica un único evento y la plataforma de integración lo entrega a todos los interesados, sin que el ERP necesite saber quién los consume (SUP-09, SUP-10). Esto es lo que permite "actuar de forma temprana": la alerta llega al profesional asignado sin depender de que alguien revise el ERP manualmente, y el data warehouse queda sincronizado por el mismo evento, no por un proceso aparte.
 

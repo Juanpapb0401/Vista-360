@@ -27,7 +27,7 @@ Queda en `http://localhost:8080`. El perfil `dev` habilita dos cosas que no exis
 | Consola H2 | http://localhost:8080/h2-console (JDBC `jdbc:h2:mem:academico`, usuario `sa`, sin contraseña) |
 | Salud | http://localhost:8080/actuator/health |
 
-Pruebas: `mvn test` (13 pruebas: unitarias del recálculo de notas e integración de los endpoints).
+Pruebas: `mvn test` (23 pruebas: unitarias del recálculo de notas e integración de ambos endpoints, la autorización, los códigos de error del contrato y la idempotencia de la sincronización).
 
 > Este repositorio no incluye el wrapper de Maven; usa `mvn` directamente, o genéralo con `mvn wrapper:wrapper`.
 
@@ -69,10 +69,13 @@ SERVICIO=$(curl -s "http://localhost:8080/api/v1/dev/token?rol=SERVICE" \
   | python3 -c "import sys,json;print(json.load(sys.stdin)['access_token'])")
 
 curl -s -X POST -H "Authorization: Bearer $SERVICIO" -H "Content-Type: application/json" \
-  -d '{"codigoEstudiante":"A00123456","codigoMateria":"MAT2201","periodoAcademico":"2026-2",
+  -d '{"idEvaluacionOrigen":"ERP-EVAL-001",
+       "codigoEstudiante":"A00123456","codigoMateria":"MAT2201","periodoAcademico":"2026-2",
        "tipo":"PARCIAL","nombre":"Parcial 1","valor":3.90,"porcentaje":30.00,"fecha":"2026-08-28"}' \
   http://localhost:8080/api/v1/interno/sincronizacion/evaluaciones
 ```
+
+`idEvaluacionOrigen` es la clave de la evaluación en el ERP y es obligatoria. Repite este mismo comando las veces que quieras: la nota no cambia y la evaluación no se duplica. La plataforma de integración entrega los eventos *al menos una vez* (SUP-09), así que el reintento es el caso esperado, no la excepción.
 
 ### 5. Volver a consultar las materias
 
@@ -115,17 +118,19 @@ Errores, siempre con el mismo sobre `{"error": "...", "mensaje": "..."}`: `PARAM
 - **La firma del JWT se valida localmente**, con una llave pública RSA, sin una llamada de red por petición (SUP-06). Aquí la emite un `DevTokenController` de perfil `dev` porque no hay una plataforma de identidad real disponible; en producción la llave la publicaría el IdP institucional y ese controlador no existiría.
 - **La autorización de negocio vive en `AutorizacionHelper`, no en la configuración de seguridad.** Un token `ESTUDIANTE` solo accede a su propio `sub`; un token `SERVICE` accede a cualquier estudiante. Este servicio **no** valida la asignación estudiante–profesional, porque no es dueño de ese dato (SUP-02): confía en que Vista 360° Core ya la validó. Poner esa validación aquí duplicaría una regla cuya fuente está en otro sistema.
 - **El servicio es de solo lectura sobre su propia proyección.** No escribe hacia el ERP ni ofrece un CRUD de estudiantes o materias; eso está fuera del alcance declarado (SUP-05).
+- **La sincronización es idempotente.** Cada evento se identifica por su clave en el ERP (`id_evaluacion_origen`, con restricción de unicidad), así que reprocesarlo actualiza la evaluación existente en vez de insertar otra. Sin esto, un reintento de la plataforma de integración duplicaría la fila y distorsionaría la nota.
+- **La paginación siempre lleva un orden explícito.** Una consulta paginada sin `ORDER BY` no garantiza el orden entre páginas: una misma fila puede aparecer dos veces o no aparecer nunca al recorrer el listado.
 - **Las llaves RSA de `src/main/resources/keys/` están versionadas a propósito.** Son de desarrollo, sin ningún dato real detrás, y así el repositorio corre recién clonado.
 
 ## Qué se implementó y qué quedó fuera
 
-**Implementado:** los dos endpoints del contrato con paginación y validación de parámetros; el modelo de datos completo con migraciones Flyway y datos de prueba; seguridad JWT con las dos reglas de autorización; el manejo uniforme de errores; el sincronizador que recalcula la nota; documentación OpenAPI; y 13 pruebas (unitarias del cálculo ponderado, integración de los endpoints, y los casos negativos de autorización, validación y recurso inexistente).
+**Implementado:** los dos endpoints del contrato con paginación ordenada y validación de parámetros; el modelo de datos completo con migraciones Flyway y datos de prueba; seguridad JWT con las dos reglas de autorización; el manejo uniforme de errores; el sincronizador que recalcula la nota; documentación OpenAPI; y 23 pruebas (unitarias del cálculo ponderado, integración de los endpoints, idempotencia de la sincronización, y los casos negativos de autorización, validación, tipo de parámetro y recurso inexistente).
 
 **Fuera de alcance, de forma deliberada:**
 
-- **La sincronización real desde el ERP.** El endpoint `/api/v1/interno/sincronizacion/evaluaciones` simula al consumidor de eventos para poder demostrar el recálculo; el consumidor real (suscriptor de la plataforma de integración, con reintentos e idempotencia) no se implementó.
+- **La sincronización real desde el ERP.** El endpoint `/api/v1/interno/sincronizacion/evaluaciones` simula al consumidor de eventos para poder demostrar el recálculo. La idempotencia sí está implementada, porque es lo que hace correcto el reproceso; lo que falta es el consumidor real suscrito a la plataforma de integración, con su política de reintentos y su cola de mensajes fallidos.
 - **PostgreSQL.** El esquema está escrito para ser portable, pero solo se ejecutó contra H2.
-- **Observabilidad.** El diseño la declara necesaria (SUP-23, y es la respuesta al Escenario A de la Parte 4): trazas con identificador de correlación y auditoría de accesos. No se implementó en el servicio.
+- **Observabilidad completa.** Hay salud (`/actuator/health`) y los errores inesperados quedan en el log con su traza, pero falta lo que pide SUP-23 para responder al Escenario A de la Parte 4: trazas distribuidas con identificador de correlación y métricas exportadas.
 - **La auditoría de accesos** que exige el Escenario B de la Parte 4 (SUP-19). Está diseñada, no construida.
 - **Caché.** El diseño define políticas por dato (SUP-14, SUP-15), pero aplican a la capa de agregación de Vista 360° Core, no a este servicio.
 
@@ -134,6 +139,6 @@ Errores, siempre con el mismo sobre `{"error": "...", "mensaje": "..."}`: `PARAM
 El enunciado pide declararlo explícitamente. Se usó **Claude (Anthropic)**, en dos modalidades:
 
 - **Claude en conversación**, para la fase de diseño: discutir alternativas de arquitectura, presionar sobre los supuestos hasta dejarlos declarados con su justificación e impacto, y redactar los documentos de `docs/`. Las decisiones (dos piezas desplegables en vez de microservicios, nota materializada, autorización repartida entre Core y este servicio) se tomaron en esa discusión; la IA sirvió para contrastarlas y encontrarles los puntos débiles, no para reemplazarlas.
-- **Claude Code**, para la implementación: generar el esqueleto del proyecto a partir del contrato ya escrito, redactar las clases, escribir las pruebas, y depurar los errores reales que aparecieron al compilar y ejecutar por primera vez (la versión de Lombok frente al JDK del entorno, el procesamiento de anotaciones desactivado por defecto desde JDK 23, un `Converter` expuesto como bean que rompía el arranque de Spring, y la codificación de caracteres en las respuestas de error).
+- **Claude Code**, para la implementación: generar el esqueleto del proyecto a partir del contrato ya escrito, redactar las clases, escribir las pruebas, depurar los errores reales que aparecieron al compilar y ejecutar por primera vez (la versión de Lombok frente al JDK del entorno, el procesamiento de anotaciones desactivado por defecto desde JDK 23, un `Converter` expuesto como bean que rompía el arranque de Spring, y la codificación de caracteres en las respuestas de error), y **auditar el código en busca de defectos**: de ahí salieron seis, entre ellos un manejador de excepciones que devolvía `500` en casos que el contrato define como `400` o `404` y descartaba las trazas sin registrarlas, y una paginación sin orden explícito.
 
 En ambos casos el flujo fue el mismo: las decisiones y el criterio son propios y están documentados en `docs/`; la IA aceleró la redacción y la depuración.

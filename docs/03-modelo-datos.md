@@ -37,6 +37,7 @@ erDiagram
     EVALUACION {
         bigint id PK
         bigint matricula_id FK
+        varchar id_evaluacion_origen UK
         varchar tipo
         varchar nombre
         numeric valor
@@ -59,6 +60,7 @@ No hay una tabla para "profesor" ni para "asignación estudiante-profesional": l
 - **`periodo_academico.vigente` es una columna explícita, no inferida por fecha.** Un proceso de sincronización la actualiza. Se prefirió así porque el corte real de un semestre (exámenes finales, cierre de notas) no siempre coincide con el rango de fechas "de calendario", y una columna explícita es más fácil de corregir manualmente si algo se desfasa.
 - **Restricción de unicidad en `matricula`**: `(codigo_estudiante, codigo_materia, periodo_academico)` no se repite. Un estudiante no puede estar matriculado dos veces en la misma materia en el mismo periodo.
 - **`valor` usa escala `0.00` a `5.00`**, la escala colombiana estándar de calificación.
+- **`evaluacion.id_evaluacion_origen` guarda la clave de la evaluación en el ERP, con restricción de unicidad.** La plataforma de integración entrega los eventos *al menos una vez* (SUP-09), así que el mismo evento puede llegar dos veces: sin una clave de negocio que lo identifique, cada reintento insertaría una fila nueva y distorsionaría `nota_actual`. Con ella, reprocesar un evento actualiza la fila existente y deja el sistema en el mismo estado. La columna admite nulos para las evaluaciones cargadas por otras vías, y la restricción de unicidad ignora los nulos tanto en H2 como en PostgreSQL.
 
 ## Script de migración inicial
 
@@ -104,10 +106,14 @@ CREATE TABLE evaluacion (
     nombre              VARCHAR(150)  NOT NULL,
     valor               NUMERIC(3,2)  NOT NULL CHECK (valor >= 0.00 AND valor <= 5.00),
     porcentaje          NUMERIC(5,2)  NOT NULL CHECK (porcentaje > 0.00 AND porcentaje <= 100.00),
-    fecha               DATE          NOT NULL
+    fecha               DATE          NOT NULL,
+    -- Clave de la evaluación en el sistema de origen. Hace idempotente la
+    -- sincronización ante los reintentos de la plataforma de integración (SUP-09).
+    id_evaluacion_origen VARCHAR(64)  NULL
 );
 
 CREATE INDEX idx_evaluacion_matricula ON evaluacion (matricula_id);
+CREATE UNIQUE INDEX uq_evaluacion_origen ON evaluacion (id_evaluacion_origen);
 ```
 
 ## Supuestos declarados para esta parte
