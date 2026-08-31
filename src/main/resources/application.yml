@@ -38,12 +38,12 @@ management:
 
 app:
   security:
-    public-key-path: classpath:keys/dev-public.pem
-    private-key-path: classpath:keys/dev-private.pem
-
-logging:
-  level:
-    com.vista360.academico: DEBUG
+    # public-key-path: en un ambiente real, apunta a la llave pública de la
+    # plataforma de identidad (ej. file:/etc/vista360/idp-public.pem). Sin
+    # configurar, el servicio genera un par de llaves RSA efímero en memoria,
+    # pensado solo para desarrollo y pruebas (ver LlavesRsaConfig).
+    issuer: vista360-dev-issuer
+    audience: servicio-academico
 
 ---
 # Perfil "dev": habilita el emisor de tokens de prueba (DevTokenController)
@@ -60,3 +60,11 @@ spring:
       path: /h2-console
   jpa:
     show-sql: true
+  flyway:
+    # Los datos ficticios de demostración solo existen en desarrollo; en
+    # cualquier otro ambiente Flyway aplica únicamente el esquema.
+    locations: classpath:db/migration,classpath:db/testdata
+
+logging:
+  level:
+    com.vista360.academico: DEBUG

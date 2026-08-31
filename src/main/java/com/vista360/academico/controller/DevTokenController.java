@@ -5,10 +5,9 @@ import com.nimbusds.jose.JWSHeader;
 import com.nimbusds.jose.crypto.RSASSASigner;
 import com.nimbusds.jwt.JWTClaimsSet;
 import com.nimbusds.jwt.SignedJWT;
-import com.vista360.academico.config.RsaKeyLoader;
+import com.vista360.academico.config.LlavesRsa;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Profile;
-import org.springframework.core.io.Resource;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -24,9 +23,11 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Emite JWT de prueba, firmados con la llave privada de desarrollo (par de la
- * llave pública que usa {@link com.vista360.academico.config.SecurityConfig}
- * para validar). Solo existe con el perfil {@code dev} activo.
+ * Emite JWT de prueba, firmados con la llave privada del par efímero que se
+ * genera al arrancar (ver {@link com.vista360.academico.config.LlavesRsaConfig});
+ * la llave pública de ese mismo par es la que usa
+ * {@link com.vista360.academico.config.SecurityConfig} para validar. Solo
+ * existe con el perfil {@code dev} activo.
  *
  * <p>Reemplaza, únicamente para poder probar este servicio de forma
  * aislada, a la plataforma de identidad real descrita en SUP-06
@@ -42,11 +43,23 @@ public class DevTokenController {
     private static final Set<String> ROLES_VALIDOS = Set.of("ESTUDIANTE", "SERVICE");
 
     private final RSAPrivateKey llavePrivada;
+    private final String emisor;
+    private final String audiencia;
 
     public DevTokenController(
-            @Value("${app.security.private-key-path:classpath:keys/dev-private.pem}") Resource llavePrivadaResource
+            LlavesRsa llaves,
+            @Value("${app.security.issuer:vista360-dev-issuer}") String emisor,
+            @Value("${app.security.audience:servicio-academico}") String audiencia
     ) {
-        this.llavePrivada = RsaKeyLoader.cargarLlavePrivada(llavePrivadaResource);
+        if (!llaves.puedeFirmar()) {
+            // Si hay una llave pública externa configurada, este servicio no
+            // posee la privada y no puede (ni debe) emitir tokens.
+            throw new IllegalStateException("El perfil dev requiere el par de llaves efímero; "
+                    + "no emita tokens de prueba con la llave de un emisor real.");
+        }
+        this.llavePrivada = llaves.privada();
+        this.emisor = emisor;
+        this.audiencia = audiencia;
     }
 
     /**
@@ -73,7 +86,8 @@ public class DevTokenController {
         try {
             JWTClaimsSet claims = new JWTClaimsSet.Builder()
                     .subject(sujeto)
-                    .issuer("vista360-dev-issuer")
+                    .issuer(emisor)
+                    .audience(audiencia)
                     .issueTime(Date.from(ahora))
                     .expirationTime(Date.from(ahora.plus(1, ChronoUnit.HOURS)))
                     .claim("rol", rol)

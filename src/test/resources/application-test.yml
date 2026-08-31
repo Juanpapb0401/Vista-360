@@ -1,0 +1,7 @@
+# Perfil "test": las pruebas de integración corren contra el mismo conjunto de
+# datos ficticios que el perfil dev (db/testdata), pero con la cadena de
+# seguridad de un ambiente real: sin consola H2, sin emisor de tokens de
+# prueba y sin Swagger público.
+spring:
+  flyway:
+    locations: classpath:db/migration,classpath:db/testdata
