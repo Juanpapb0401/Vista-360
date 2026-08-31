@@ -1,12 +1,58 @@
 # Parte 1 · Diseño de la arquitectura
 
-Este documento presenta el diagrama de arquitectura de Vista 360° del Estudiante y las decisiones que lo sostienen. Se apoya en la hoja de supuestos (`00-supuestos.md`), referenciada aquí por identificador (SUP-XX) cada vez que una decisión depende de uno declarado allí.
+Este documento presenta el diagrama de arquitectura de Vista 360° del Estudiante y las decisiones que lo sostienen. Se apoya en la hoja de supuestos (`00-supuestos.md`), referenciada aquí por identificador (SUP-XX) cada vez que una decisión depende de uno declarado allí. La declaración de uso de herramientas de IA que pide el enunciado está en el [README](../README.md#uso-de-herramientas-de-inteligencia-artificial) y al final de `00-supuestos.md`.
 
 La arquitectura se compone de dos aplicaciones nuevas y desplegables de forma independiente, tal como se fijó en SUP-05b: el **Servicio Académico** (microservicio, exigido como pieza propia por la Parte 2) y **Vista 360° Core** (monolito modular, con los módulos internos Acompañamiento y Agregación). El resto del ecosistema ya existe y no se modifica.
 
 ## Diagrama general de componentes
 
-Se presenta en dos vistas separadas, en vez de una sola con todo mezclado, porque juntar el flujo síncrono y el asíncrono en un mismo diagrama satura las etiquetas de las flechas y dificulta la lectura. Cada vista cuenta una sola historia.
+El mapa general muestra todos los componentes de la solución y del ecosistema en una sola imagen, sin etiquetas de protocolo, para servir de portada. El detalle de cada tipo de comunicación se desarrolla después en dos vistas separadas: juntar el flujo síncrono y el asíncrono en un mismo diagrama con todas sus etiquetas satura las flechas y dificulta la lectura, así que cada vista cuenta una sola historia.
+
+### Vista 0: mapa general de la arquitectura
+
+![Arquitectura general de Vista 360°](img/00-arquitectura-general.png)
+
+<details>
+<summary>Código fuente del diagrama</summary>
+
+```mermaid
+flowchart LR
+    subgraph USR["Usuarios"]
+        EST["Estudiante"]
+        ACOMP["Equipo de<br>acompañamiento"]
+    end
+
+    subgraph V360["Vista 360° del Estudiante (nuevo)"]
+        FE["Frontend<br>Vista 360°"]
+        CORE["Vista 360° Core<br>(Acompañamiento + Agregación)"]
+        BDCORE[("BD Core<br>reportes, alertas,<br>solicitudes, asignaciones")]
+        ACAD["Servicio Académico"]
+        BDACAD[("BD Académica<br>proyección de<br>matrículas y notas")]
+    end
+
+    subgraph ECO["Ecosistema existente"]
+        ID["Plataforma<br>de Identidad"]
+        INT["Plataforma<br>de Integración"]
+        ERP["ERP<br>Institucional"]
+        LMS["LMS"]
+        DWH["Data<br>Warehouse"]
+    end
+
+    EST --> FE
+    ACOMP --> FE
+    FE -.-> ID
+    FE --> INT
+    INT --> CORE
+    INT --> ACAD
+    CORE --- BDCORE
+    ACAD --- BDACAD
+    INT <--> ERP
+    INT --> LMS
+    CORE -.-> INT
+    ACAD -.-> INT
+    INT -.-> DWH
+```
+</details>
 
 ### Vista 1: flujo síncrono (consultas del usuario)
 
@@ -18,37 +64,39 @@ Se presenta en dos vistas separadas, en vez de una sola con todo mezclado, porqu
 ```mermaid
 flowchart TD
     subgraph USR["Usuarios"]
+        direction LR
         EST["Estudiante"]
         ACOMP["Equipo de acompañamiento"]
     end
 
-    subgraph V360["Vista 360° del Estudiante (nuevo)"]
-        FE["Frontend Vista 360°"]
-        CORE["Vista 360° Core
-(módulos: Acompañamiento y Agregación)"]
-        ACAD["Servicio Académico
-(BD propia, proyección de matrículas y notas)"]
-    end
+    FE["Frontend Vista 360°"]
 
     subgraph ECO["Ecosistema existente"]
-        ID["Plataforma de Identidad
-(OIDC / JWT)"]
-        INT["Plataforma de Integración
-(mediación + mensajería)"]
-        ERP["ERP Institucional
-(fuente de verdad)"]
-        LMS["LMS
-(cloud, API)"]
+        direction LR
+        ID["Plataforma de Identidad<br>(OIDC / JWT)"]
+        INT["Plataforma de Integración<br>(mediación + mensajería)"]
+    end
+
+    subgraph V360["Vista 360° del Estudiante (nuevo)"]
+        direction LR
+        CORE["Vista 360° Core<br>(módulos: Acompañamiento y Agregación;<br>BD propia: reportes, alertas, asignaciones)"]
+        ACAD["Servicio Académico<br>(BD propia, proyección de matrículas y notas)"]
+    end
+
+    subgraph FUENTES["Fuentes existentes"]
+        direction LR
+        ERP["ERP Institucional<br>(fuente de verdad)"]
+        LMS["LMS<br>(cloud, API)"]
     end
 
     EST --> FE
     ACOMP --> FE
-    FE -.->|login OIDC, redirección| ID
-    FE -->|REST, Bearer JWT| INT
-    INT -->|REST| CORE
-    INT -->|REST| ACAD
-    INT -->|REST, solo lectura| ERP
-    INT -->|REST| LMS
+    FE -.->|"login OIDC, redirección"| ID
+    FE -->|"REST, Bearer JWT"| INT
+    INT -->|"REST"| CORE
+    INT -->|"REST"| ACAD
+    INT -->|"REST, solo lectura"| ERP
+    INT -->|"REST"| LMS
 ```
 </details>
 
@@ -62,17 +110,13 @@ flowchart TD
 ```mermaid
 flowchart TD
     subgraph V360["Vista 360° del Estudiante (nuevo)"]
-        CORE["Vista 360° Core
-(módulos: Acompañamiento y Agregación)"]
-        ACAD["Servicio Académico
-(BD propia, proyección de matrículas y notas)"]
+        CORE["Vista 360° Core<br>(módulos: Acompañamiento y Agregación;<br>BD propia: reportes, alertas, asignaciones)"]
+        ACAD["Servicio Académico<br>(BD propia, proyección de matrículas y notas)"]
     end
 
     subgraph ECO["Ecosistema existente"]
-        INT["Plataforma de Integración
-(mediación + mensajería)"]
-        ERP["ERP Institucional
-(fuente de verdad)"]
+        INT["Plataforma de Integración<br>(mediación + mensajería)"]
+        ERP["ERP Institucional<br>(fuente de verdad)"]
         DWH["Data Warehouse"]
     end
 
@@ -87,6 +131,17 @@ flowchart TD
 **Cómo leer ambas vistas:** línea sólida es comunicación síncrona (pido y espero respuesta); línea punteada es comunicación asíncrona (evento o sincronización de fondo). En la Vista 1, todo el tráfico síncrono hacia sistemas externos pasa por la Plataforma de Integración como puerta de enlace única, en vez de que cada aplicación de Vista 360° hable directo con el ERP o el LMS. Esa decisión centraliza en un solo punto la protección de esas APIs y contiene el impacto si el ERP cambia un endpoint. La Vista 2 muestra por separado el otro tipo de tráfico, el que nadie está esperando en pantalla, el ERP avisa que algo cambió, y Vista 360° Core y el Servicio Académico se mantienen al día o publican sus propios cambios sin bloquear a ningún usuario.
 
 Un detalle que el diagrama no muestra por claridad: tanto Vista 360° Core como el Servicio Académico validan la firma del JWT de forma local, usando la llave pública que publica la Plataforma de Identidad, sin hacer una llamada de red por cada petición (ver SUP-06). Se detalla en la Parte 3.1.
+
+## Qué persiste cada pieza nueva
+
+El enunciado deja explícitamente en manos del diseño qué persiste la nueva plataforma. Las dos piezas nuevas tienen base de datos propia, y ninguna comparte la suya con la otra:
+
+- **Vista 360° Core** es el dueño de los datos que hoy no existen en ningún sistema (SUP-02): reportes de acompañamiento, alertas, solicitudes y la asignación estudiante–profesional (SUP-04). Persisten en una base de datos relacional propia de Core. Dentro de ella, el módulo Acompañamiento y el módulo Agregación mantienen esquemas separados (la frontera estricta de código y de esquema de SUP-05b): Acompañamiento posee las tablas de dominio recién listadas; Agregación no posee dominio propio —arma la vista consolidada pidiendo datos a las fuentes— y su esquema se limita a lo operativo (caché corta del LMS con TTL, si se materializa, y estado técnico). Esa separación es lo que permitiría extraer Agregación como servicio independiente si algún día creciera, sin desenredar tablas.
+- **El Servicio Académico** persiste su proyección de matrículas y notas, sincronizada desde el ERP (SUP-07). Su modelo completo está en [`03-modelo-datos.md`](03-modelo-datos.md).
+
+Elección de motor: relacional (PostgreSQL) para ambas, por la misma razón en los dos casos: son datos estructurados, con relaciones claras y necesidad de integridad referencial y de transacciones; nada en el caso exige un modelo documental o de grafos que justifique operar otro motor.
+
+**Despliegue.** Las piezas nuevas (Frontend, Core, Servicio Académico y sus bases) se despliegan en la nube institucional o en el datacenter propio según la política vigente; lo único que la arquitectura exige es que su camino al ERP —que es on-premise— pase por la Plataforma de Integración, de modo que la decisión de dónde corre Vista 360° no cambia ningún contrato. El LMS ya se consume por API pública en la nube, así que es indiferente a esta decisión.
 
 ## De dónde sale cada dato, y por qué
 
@@ -111,7 +166,7 @@ Un detalle que el diagrama no muestra por claridad: tanto Vista 360° Core como 
 | Vista 360° Core (Agregación) a ERP, dato financiero | Síncrono, en vivo, sin caché | SUP-14, la corrección pesa más que la latencia en este dato puntual. |
 | Servicio Académico a ERP | Asíncrono, eventos vía plataforma de integración, o consulta periódica si el ERP no emite eventos | Es sincronización de una proyección propia, no una respuesta esperada en pantalla, evita golpear al ERP en cada lectura. |
 | ERP a Vista 360° Core (Acompañamiento) y a Data warehouse, ante cambio de condición académica | Asíncrono, evento con múltiples suscriptores | Ver Escenario B de la Parte 3 en `04-parte-3.md`, un solo evento, varios interesados, desacopla al ERP de saber quién consume el cambio. |
-| Vista 360° Core y Servicio Académico a Data warehouse | Asíncrono, evento o exportación periódica | SUP-12, Vista 360° no escribe directo al modelo dimensional, solo publica. |
+| Vista 360° Core y Servicio Académico a Data warehouse | Asíncrono: evento para lo que alimenta intervención temprana (cambios de condición, alertas), exportación periódica para el resto | SUP-12, Vista 360° no escribe directo al modelo dimensional, solo publica hacia la capa de ingesta. El criterio: si el dato pierde valor con las horas (una alerta), viaja como evento; si solo alimenta tableros e históricos (actividad, notas consolidadas), un batch diario cuesta menos de operar. |
 | Todos los servicios con la Plataforma de identidad | Validación local de JWT por firma | Cada servicio valida el token que recibe, sin llamada de red por petición (SUP-06). |
 
 ## Escenarios de comunicación (Parte 3.2)
