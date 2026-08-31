@@ -154,6 +154,41 @@ class EvaluacionSincronizacionServiceTest {
         assertThat(respuesta.totalEvaluacionesRegistradas()).isEqualTo(1);
     }
 
+    @Test
+    @DisplayName("Si el evento reasigna la evaluación a otra matrícula, la anterior también recalcula su nota")
+    void reasignarLaEvaluacionRecalculaLaMatriculaAnterior() {
+        // El ERP corrigió la materia de una evaluación ya sincronizada: la fila
+        // migra a la matrícula nueva y la que la pierde no puede quedarse con
+        // una nota que todavía la incluye.
+        Matricula matriculaAnterior = new Matricula();
+        matriculaAnterior.setId(1L);
+        matriculaAnterior.setNotaActual(new BigDecimal("2.00"));
+        Matricula matriculaNueva = new Matricula();
+        matriculaNueva.setId(2L);
+
+        Evaluacion reasignada = evaluacion("2.00", "25.00");
+        reasignada.setId(10L);
+        reasignada.setIdEvaluacionOrigen("ERP-EVAL-001");
+        reasignada.setMatricula(matriculaAnterior);
+
+        when(matriculaRepository
+                .findByEstudiante_CodigoEstudianteAndMateria_CodigoMateriaAndPeriodoAcademico_Codigo(
+                        ESTUDIANTE, MATERIA, PERIODO))
+                .thenReturn(Optional.of(matriculaNueva));
+        when(evaluacionRepository.findByIdEvaluacionOrigen("ERP-EVAL-001"))
+                .thenReturn(Optional.of(reasignada));
+        when(evaluacionRepository.findByMatricula_Id(2L)).thenReturn(List.of(reasignada));
+        when(evaluacionRepository.findByMatricula_Id(1L)).thenReturn(List.of());
+
+        servicio.sincronizar(peticion());
+
+        // La matrícula que perdió la evaluación queda sin nota (no le quedan
+        // evaluaciones) y también fue persistida.
+        assertThat(matriculaAnterior.getNotaActual()).isNull();
+        verify(matriculaRepository).save(matriculaAnterior);
+        verify(matriculaRepository).save(matriculaNueva);
+    }
+
     private EvaluacionSyncRequest peticion() {
         return new EvaluacionSyncRequest(
                 "ERP-EVAL-001",

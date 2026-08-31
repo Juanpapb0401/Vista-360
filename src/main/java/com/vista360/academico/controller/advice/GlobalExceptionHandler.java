@@ -6,8 +6,10 @@ import com.vista360.academico.exception.ParametroInvalidoException;
 import com.vista360.academico.exception.RecursoNoEncontradoException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -83,6 +85,20 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
                 .body(new ErrorResponse("RECURSO_NO_ENCONTRADO",
                         "La ruta solicitada no existe"));
+    }
+
+    /**
+     * Choque de escrituras concurrentes que sobrevivió al reintento del
+     * controlador (ver SincronizacionController): la restricción de unicidad
+     * de idempotencia o el bloqueo optimista de la matrícula. Es una condición
+     * transitoria, no un fallo del servicio: 409 para que el emisor reentregue.
+     */
+    @ExceptionHandler({DataIntegrityViolationException.class, ObjectOptimisticLockingFailureException.class})
+    public ResponseEntity<ErrorResponse> manejarConflictoDeEscritura(Exception ex) {
+        log.warn("Conflicto de escritura concurrente: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(new ErrorResponse("CONFLICTO_CONCURRENCIA",
+                        "El registro fue modificado por otra operación; reintente la entrega del evento"));
     }
 
     /**

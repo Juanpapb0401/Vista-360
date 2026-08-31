@@ -12,6 +12,7 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
+import jakarta.persistence.Version;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -70,4 +71,13 @@ public class Matricula {
     /** Nota consolidada, recalculada automáticamente. Nula si no hay evaluaciones aún. */
     @Column(name = "nota_actual", precision = 3, scale = 2)
     private BigDecimal notaActual;
+
+    /**
+     * Bloqueo optimista: dos sincronizaciones concurrentes sobre la misma
+     * matrícula no pueden pisarse {@code notaActual} en silencio; la segunda
+     * falla y el controlador la reintenta (ver SincronizacionController).
+     */
+    @Version
+    @Column(name = "version", nullable = false)
+    private Long version;
 }

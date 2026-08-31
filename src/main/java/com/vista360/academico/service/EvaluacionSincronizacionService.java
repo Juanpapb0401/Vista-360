@@ -13,6 +13,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * Simula lo que en producción haría el componente de sincronización real:
@@ -62,6 +63,12 @@ public class EvaluacionSincronizacionService {
                 .findByIdEvaluacionOrigen(request.idEvaluacionOrigen())
                 .orElseGet(Evaluacion::new);
 
+        // Si el ERP corrige la materia o el periodo de una evaluación ya
+        // sincronizada, la fila cambia de matrícula; la matrícula que la
+        // pierde también debe recalcular su nota, o queda con un promedio
+        // que incluye una evaluación que ya no le pertenece.
+        Matricula matriculaAnterior = evaluacion.getId() != null ? evaluacion.getMatricula() : null;
+
         evaluacion.setIdEvaluacionOrigen(request.idEvaluacionOrigen());
         evaluacion.setMatricula(matricula);
         evaluacion.setTipo(request.tipo());
@@ -71,11 +78,12 @@ public class EvaluacionSincronizacionService {
         evaluacion.setFecha(request.fecha());
         evaluacionRepository.save(evaluacion);
 
-        List<Evaluacion> todasLasEvaluaciones = evaluacionRepository.findByMatricula_Id(matricula.getId());
-        BigDecimal notaRecalculada = recalcularNotaPonderada(todasLasEvaluaciones);
+        List<Evaluacion> todasLasEvaluaciones = recalcularNota(matricula);
+        BigDecimal notaRecalculada = matricula.getNotaActual();
 
-        matricula.setNotaActual(notaRecalculada);
-        matriculaRepository.save(matricula);
+        if (matriculaAnterior != null && !Objects.equals(matriculaAnterior.getId(), matricula.getId())) {
+            recalcularNota(matriculaAnterior);
+        }
 
         return new EvaluacionSyncResponse(
                 request.codigoEstudiante(),
@@ -84,6 +92,14 @@ public class EvaluacionSincronizacionService {
                 notaRecalculada,
                 todasLasEvaluaciones.size()
         );
+    }
+
+    /** Recalcula y persiste {@code nota_actual} de una matrícula; devuelve sus evaluaciones. */
+    private List<Evaluacion> recalcularNota(Matricula matricula) {
+        List<Evaluacion> evaluaciones = evaluacionRepository.findByMatricula_Id(matricula.getId());
+        matricula.setNotaActual(recalcularNotaPonderada(evaluaciones));
+        matriculaRepository.save(matricula);
+        return evaluaciones;
     }
 
     /**
