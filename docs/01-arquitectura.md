@@ -44,6 +44,7 @@ flowchart LR
     FE --> INT
     INT --> CORE
     INT --> ACAD
+    CORE -->|"token de servicio"| ACAD
     CORE --- BDCORE
     ACAD --- BDACAD
     INT <--> ERP
@@ -95,6 +96,7 @@ flowchart TD
     FE -->|"REST, Bearer JWT"| INT
     INT -->|"REST"| CORE
     INT -->|"REST"| ACAD
+    CORE -->|"REST, token de servicio"| ACAD
     INT -->|"REST, solo lectura"| ERP
     INT -->|"REST"| LMS
 ```
@@ -128,7 +130,7 @@ flowchart TD
 ```
 </details>
 
-**Cómo leer ambas vistas:** línea sólida es comunicación síncrona (pido y espero respuesta); línea punteada es comunicación asíncrona (evento o sincronización de fondo). En la Vista 1, todo el tráfico síncrono hacia sistemas externos pasa por la Plataforma de Integración como puerta de enlace única, en vez de que cada aplicación de Vista 360° hable directo con el ERP o el LMS. Esa decisión centraliza en un solo punto la protección de esas APIs y contiene el impacto si el ERP cambia un endpoint. La Vista 2 muestra por separado el otro tipo de tráfico, el que nadie está esperando en pantalla, el ERP avisa que algo cambió, y Vista 360° Core y el Servicio Académico se mantienen al día o publican sus propios cambios sin bloquear a ningún usuario.
+**Cómo leer ambas vistas:** línea sólida es comunicación síncrona (pido y espero respuesta); línea punteada es comunicación asíncrona (evento o sincronización de fondo). En la Vista 1, todo el tráfico síncrono hacia sistemas externos pasa por la Plataforma de Integración como puerta de enlace única, en vez de que cada aplicación de Vista 360° hable directo con el ERP o el LMS. Esa decisión centraliza en un solo punto la protección de esas APIs y contiene el impacto si el ERP cambia un endpoint. Entre las piezas propias de Vista 360° la regla es distinta: Core llama directo al Servicio Académico con un token de servicio (la arista `CORE → ACAD`), porque ahí la puerta de enlace no aporta nada —ambos extremos son propios, comparten el mismo mecanismo de validación de JWT, y el detalle de esa relación está en la Parte 3.1 (`04-parte-3.md`)—. Así, el Servicio Académico se consulta por dos caminos legítimos: el estudiante directo con su propio token (vía la puerta de enlace) y Core con token de servicio al armar la vista consolidada de un profesional. La Vista 2 muestra por separado el otro tipo de tráfico, el que nadie está esperando en pantalla, el ERP avisa que algo cambió, y Vista 360° Core y el Servicio Académico se mantienen al día o publican sus propios cambios sin bloquear a ningún usuario.
 
 Un detalle que el diagrama no muestra por claridad: tanto Vista 360° Core como el Servicio Académico validan la firma del JWT de forma local, usando la llave pública que publica la Plataforma de Identidad, sin hacer una llamada de red por cada petición (ver SUP-06). Se detalla en la Parte 3.1.
 
@@ -163,6 +165,7 @@ Elección de motor: relacional (PostgreSQL) para ambas, por la misma razón en l
 |---|---|---|
 | Frontend a Vista 360° Core / Servicio Académico | Síncrono, REST sobre HTTPS, vía la plataforma de integración | El usuario espera respuesta en pantalla, no hay nada que ganar con asíncrono aquí. |
 | Vista 360° Core (Agregación) a ERP, LMS | Síncrono, vía plataforma de integración | Datos que se piden bajo demanda para armar la vista consolidada. |
+| Vista 360° Core (Agregación) a Servicio Académico | Síncrono, REST, token de servicio | Core arma la vista consolidada pidiendo notas ya materializadas, sin repetir la validación de asignación estudiante-profesional que ya hizo (SUP-02). |
 | Vista 360° Core (Agregación) a ERP, dato financiero | Síncrono, en vivo, sin caché | SUP-14, la corrección pesa más que la latencia en este dato puntual. |
 | Servicio Académico a ERP | Asíncrono, eventos vía plataforma de integración, o consulta periódica si el ERP no emite eventos | Es sincronización de una proyección propia, no una respuesta esperada en pantalla, evita golpear al ERP en cada lectura. |
 | ERP a Vista 360° Core (Acompañamiento) y a Data warehouse, ante cambio de condición académica | Asíncrono, evento con múltiples suscriptores | Ver Escenario B de la Parte 3 en `04-parte-3.md`, un solo evento, varios interesados, desacopla al ERP de saber quién consume el cambio. |
