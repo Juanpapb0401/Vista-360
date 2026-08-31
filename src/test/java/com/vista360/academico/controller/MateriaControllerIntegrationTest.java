@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.HashSet;
@@ -27,6 +28,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
+// El perfil test carga los datos ficticios de db/testdata sin arrastrar las
+// herramientas del perfil dev (consola H2, emisor de tokens, Swagger abierto).
+@ActiveProfiles("test")
 class MateriaControllerIntegrationTest {
 
     @Autowired
@@ -158,6 +162,42 @@ class MateriaControllerIntegrationTest {
         }
 
         assertThat(vistas).containsExactlyInAnyOrder("ING1234", "MAT2201", "ING2345");
+    }
+
+    @Test
+    @DisplayName("Un estudiante que no existe responde 404")
+    void estudianteInexistente() throws Exception {
+        // Con token de servicio: la regla de autorización (un estudiante solo
+        // consulta su propio código) se evalúa antes que la existencia, así que
+        // con token de estudiante este caso daría 403, no 404.
+        mockMvc.perform(get("/api/v1/estudiantes/{codigo}/materias", "A00000000")
+                        .with(jwt().jwt(builder -> builder.subject("vista360-core").claim("rol", "SERVICE"))))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.error").value("RECURSO_NO_ENCONTRADO"));
+    }
+
+    @Test
+    @DisplayName("Un estudiante que existe pero no matriculó nada en el periodo responde 200 con lista vacía")
+    void estudianteSinMatriculasEnElPeriodo() throws Exception {
+        // A00987654 solo tiene matrículas en 2026-2; en 2026-1 existe pero no
+        // cursó nada. Eso no es un 404: el identificador es válido.
+        mockMvc.perform(get("/api/v1/estudiantes/{codigo}/materias", OTRO_ESTUDIANTE)
+                        .param("periodo", "2026-1")
+                        .with(tokenDeEstudiante(OTRO_ESTUDIANTE)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.materias.totalElements").value(0));
+    }
+
+    @Test
+    @DisplayName("Un token con rol desconocido responde 403")
+    void rolDesconocido() throws Exception {
+        // El token está bien firmado y autenticado, pero su rol no habilita
+        // ninguna regla de autorización: 403, no 401 (el 401 es para tokens
+        // ausentes, expirados o con firma inválida).
+        mockMvc.perform(get("/api/v1/estudiantes/{codigo}/materias", ESTUDIANTE)
+                        .with(jwt().jwt(builder -> builder.subject(ESTUDIANTE).claim("rol", "AUDITOR"))))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.error").value("NO_AUTORIZADO"));
     }
 
     @Test

@@ -51,7 +51,7 @@ GET /api/v1/estudiantes/{codigoEstudiante}/materias
         "nombreMateria": "Estructuras de Datos",
         "grupo": "01",
         "creditos": 3,
-        "notaActual": 4.2,
+        "notaActual": 4.19,
         "estado": "EN_CURSO"
       },
       {
@@ -155,7 +155,7 @@ Se reconocen dos tipos de token, y cada uno habilita una regla distinta:
 | Token de usuario (Authorization Code + PKCE), claim `rol=ESTUDIANTE` | El propio estudiante, vía el Frontend | El `codigoEstudiante` de la ruta debe coincidir con el claim `sub` del token. Si no coincide, `403`. |
 | Token de servicio (Client Credentials), claim `rol=SERVICE` | Vista 360° Core | Se autoriza la consulta de cualquier `codigoEstudiante`. El Servicio Académico no valida la asignación estudiante-profesional porque no es dueño de ese dato (SUP-02); confía en que Vista 360° Core ya lo validó antes de reenviar la solicitud. |
 
-Cualquier otro caso (token ausente, expirado, con firma inválida, o con un rol no reconocido) responde `401`.
+Un token ausente, expirado, o con firma, emisor o audiencia inválidos responde `401` (el problema es la autenticación). Un token bien autenticado pero cuyo `rol` no habilita ninguna de las dos reglas de la tabla responde `403` (la identidad se estableció; lo que falta es permiso).
 
 ## Respuestas de error
 
@@ -163,12 +163,13 @@ Cualquier otro caso (token ausente, expirado, con firma inválida, o con un rol 
 |---|---|---|
 | `400 Bad Request` | El parámetro `periodo` no cumple el formato esperado, o `page`/`size` son inválidos (negativos, o `size` mayor al máximo). | `{ "error": "PARAMETRO_INVALIDO", "mensaje": "..." }` |
 | `401 Unauthorized` | Token ausente, expirado, o con firma inválida. | `{ "error": "NO_AUTENTICADO", "mensaje": "..." }` |
-| `403 Forbidden` | Token válido, pero sin permiso para consultar el `codigoEstudiante` solicitado. | `{ "error": "NO_AUTORIZADO", "mensaje": "..." }` |
-| `404 Not Found` | El `codigoEstudiante` no existe, no tiene matrículas en el periodo consultado, o (Endpoint 2) el `codigoMateria` no corresponde a una materia matriculada por ese estudiante en ese periodo. | `{ "error": "RECURSO_NO_ENCONTRADO", "mensaje": "..." }` |
+| `403 Forbidden` | Token válido, pero sin permiso para consultar el `codigoEstudiante` solicitado, o con un `rol` que no habilita ninguna regla. | `{ "error": "NO_AUTORIZADO", "mensaje": "..." }` |
+| `404 Not Found` | El `codigoEstudiante` no existe, el periodo solicitado no existe, o (Endpoint 2) el `codigoMateria` no corresponde a una materia matriculada por ese estudiante en ese periodo. Un estudiante que sí existe pero no matriculó nada en el periodo **no** es un 404: responde `200` con la lista vacía, igual que una matrícula sin evaluaciones en el Endpoint 2 — el identificador es válido, la colección simplemente está vacía. | `{ "error": "RECURSO_NO_ENCONTRADO", "mensaje": "..." }` |
+| `409 Conflict` | Solo el endpoint interno de sincronización: dos entregas concurrentes del mismo evento chocaron entre sí incluso tras un reintento; la plataforma de integración debe reentregar. | `{ "error": "CONFLICTO_CONCURRENCIA", "mensaje": "..." }` |
 
 ## Supuestos declarados para esta parte
 
-- **Un estudiante tiene un único periodo académico vigente en un momento dado**, y el servicio lo puede determinar sin que se lo indiquen explícitamente (por fecha de sistema contra un calendario académico almacenado). Si el enunciado esperara que el vigente lo definiera otro sistema, se reemplaza esa lógica por una consulta a esa fuente, sin cambiar el contrato.
+- **Un estudiante tiene un único periodo académico vigente en un momento dado**, y el servicio lo puede determinar sin que se lo indiquen explícitamente: el calendario académico almacenado marca de forma explícita cuál periodo está vigente (columna `vigente`, sincronizada desde el ERP como todo lo demás), en vez de inferirlo comparando la fecha del sistema contra los rangos de fechas (ver la justificación en `03-modelo-datos.md`). Si el enunciado esperara que el vigente lo definiera otro sistema, se reemplaza esa lógica por una consulta a esa fuente, sin cambiar el contrato.
 - **La nota de una materia es el promedio ponderado de sus evaluaciones**, recalculada de forma automática cada vez que una evaluación se sincroniza, no capturada aparte a mano. Esto evita que la nota consolidada y el detalle de evaluaciones puedan quedar desincronizados entre sí, sin depender de que alguien se acuerde de actualizarla.
 - **El Servicio Académico es la proyección propia descrita en la Parte 1**, sincronizada desde el ERP, no una consulta en vivo al ERP en cada petición (ver el mapa de datos en `01-arquitectura.md`).
 - **Ambos listados se paginan** (materias, y evaluaciones dentro de una materia), con un tamaño de página máximo de 50 para evitar respuestas sin control de tamaño.

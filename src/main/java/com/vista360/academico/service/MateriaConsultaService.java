@@ -5,6 +5,7 @@ import com.vista360.academico.dto.MateriaResumenDTO;
 import com.vista360.academico.dto.MateriasResponse;
 import com.vista360.academico.dto.PaginatedResult;
 import com.vista360.academico.exception.RecursoNoEncontradoException;
+import com.vista360.academico.repository.EstudianteRepository;
 import com.vista360.academico.repository.MatriculaRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -21,10 +22,14 @@ import org.springframework.transaction.annotation.Transactional;
 public class MateriaConsultaService {
 
     private final MatriculaRepository matriculaRepository;
+    private final EstudianteRepository estudianteRepository;
     private final PeriodoResolver periodoResolver;
 
-    public MateriaConsultaService(MatriculaRepository matriculaRepository, PeriodoResolver periodoResolver) {
+    public MateriaConsultaService(MatriculaRepository matriculaRepository,
+                                  EstudianteRepository estudianteRepository,
+                                  PeriodoResolver periodoResolver) {
         this.matriculaRepository = matriculaRepository;
+        this.estudianteRepository = estudianteRepository;
         this.periodoResolver = periodoResolver;
     }
 
@@ -34,13 +39,15 @@ public class MateriaConsultaService {
         Page<Matricula> pagina = matriculaRepository
                 .findByEstudiante_CodigoEstudianteAndPeriodoAcademico_Codigo(codigoEstudiante, periodo, pageable);
 
-        // Un total de 0 en la página cero significa que el estudiante no existe,
-        // o no tiene matrículas en ese periodo; en cualquier caso, 404 según el
-        // contrato. Pedir una página fuera de rango (ej. page=5 cuando solo hay
-        // una) es distinto: ahí sí existen matrículas, solo se devuelve vacío.
-        if (pagina.getTotalElements() == 0) {
+        // Los dos casos que producen una página sin resultados son distintos y
+        // el cliente necesita distinguirlos: un estudiante que no existe es un
+        // 404 (identificador equivocado), mientras que uno que existe pero no
+        // matriculó nada en el periodo (ej. semestre de receso) recibe 200 con
+        // la lista vacía, igual que hace el endpoint de evaluaciones cuando una
+        // matrícula aún no tiene notas.
+        if (pagina.getTotalElements() == 0 && !estudianteRepository.existsById(codigoEstudiante)) {
             throw new RecursoNoEncontradoException(
-                    "El estudiante " + codigoEstudiante + " no existe o no tiene matrículas en el periodo " + periodo);
+                    "El estudiante " + codigoEstudiante + " no existe");
         }
 
         return new MateriasResponse(

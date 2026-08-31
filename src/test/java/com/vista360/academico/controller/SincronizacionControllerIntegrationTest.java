@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,6 +23,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
+// El perfil test carga los datos ficticios de db/testdata sin arrastrar las
+// herramientas del perfil dev (consola H2, emisor de tokens, Swagger abierto).
+@ActiveProfiles("test")
 // Esta clase es la única que escribe en la base. Sin la transacción de prueba,
 // las evaluaciones que inserta quedarían visibles para las demás clases —que
 // comparten el contexto y la base en memoria— y el resultado dependería del
