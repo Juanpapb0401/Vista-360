@@ -76,6 +76,8 @@ GET /api/v1/estudiantes/{codigoEstudiante}/materias
 - `notaActual` es la nota consolidada de la materia. Se mantiene como un valor ya calculado, no se recalcula en cada consulta: cada vez que se sincroniza una evaluación nueva o modificada (ver Endpoint 2), el componente de sincronización recalcula el promedio ponderado, normalizado por la suma de los porcentajes ya registrados, y lo deja listo para lectura. Es nulo si aún no hay ninguna evaluación registrada. Es el mismo patrón que usan sistemas de gestión de cursos como Moodle o Canvas.
 - `estado` refleja la situación de la matrícula en ese periodo (`EN_CURSO`, `APROBADA`, `REPROBADA`, `CANCELADA`).
 
+**Decisión declarada: el endpoint devuelve todas las matrículas del periodo, incluidas las canceladas o reprobadas, con su `estado` visible.** El enunciado habla de las materias "inscritas actualmente", y una lectura estricta excluiría las `CANCELADA`. Se decidió no filtrar en el backend: una materia cancelada sigue siendo información real del semestre del estudiante (para él mismo y para el profesional de acompañamiento, donde una cancelación puede ser justamente la señal de alerta), y ocultarla haría que el servicio decidiera por la interfaz qué merece verse. El campo `estado` deja el criterio en manos del cliente, que hoy filtra o rotula como prefiera. Si un consumidor necesitara el filtro en el servidor, la extensión natural es un parámetro `?estado=EN_CURSO` — se añade sin romper el contrato actual.
+
 ## Endpoint 2: detalle de evaluaciones de una materia
 
 ```
