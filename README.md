@@ -122,21 +122,23 @@ curl -s -H "Authorization: Bearer $SERVICIO" \
 
 Ambos endpoints de consulta aceptan `?periodo=AAAA-N` (por defecto, el vigente), `?page` y `?size` (máximo 50). El detalle completo de parámetros, respuestas y errores está en [`docs/02-especificacion-servicio.md`](docs/02-especificacion-servicio.md).
 
-Errores, siempre con el mismo sobre `{"error": "...", "mensaje": "..."}`: `PARAMETRO_INVALIDO` (400), `NO_AUTENTICADO` (401), `NO_AUTORIZADO` (403), `RECURSO_NO_ENCONTRADO` (404).
+Errores, siempre con el mismo sobre `{"error": "...", "mensaje": "..."}`: `PARAMETRO_INVALIDO` (400), `NO_AUTENTICADO` (401), `NO_AUTORIZADO` (403), `RECURSO_NO_ENCONTRADO` (404), `CONFLICTO_CONCURRENCIA` (409, solo el endpoint interno).
 
 ## Decisiones que vale la pena señalar
 
 - **`nota_actual` se almacena, no se calcula al leer.** Se recalcula en `EvaluacionSincronizacionService`, dentro de la misma transacción en que se escribe la evaluación. Es el patrón de Moodle o Canvas. A la escala de esta universidad (~10.000 estudiantes) no hacía falta por rendimiento; se adoptó porque evita que la nota consolidada y el detalle de evaluaciones queden desincronizados, y porque es la práctica estándar para este tipo de dato.
-- **La firma del JWT se valida localmente**, con una llave pública RSA, sin una llamada de red por petición (SUP-06). Aquí la emite un `DevTokenController` de perfil `dev` porque no hay una plataforma de identidad real disponible; en producción la llave la publicaría el IdP institucional y ese controlador no existiría.
+- **La firma del JWT se valida localmente**, con una llave pública RSA, sin una llamada de red por petición (SUP-06), y la validación cubre también emisor (`iss`) y audiencia (`aud`): un token firmado con la misma llave pero emitido para otro servicio no se acepta. Los tokens de prueba los emite un `DevTokenController` de perfil `dev` porque no hay una plataforma de identidad real disponible; en producción la llave la publicaría el IdP institucional y ese controlador no existiría.
 - **La autorización de negocio vive en `AutorizacionHelper`, no en la configuración de seguridad.** Un token `ESTUDIANTE` solo accede a su propio `sub`; un token `SERVICE` accede a cualquier estudiante. Este servicio **no** valida la asignación estudiante–profesional, porque no es dueño de ese dato (SUP-02): confía en que Vista 360° Core ya la validó. Poner esa validación aquí duplicaría una regla cuya fuente está en otro sistema.
 - **El servicio es de solo lectura sobre su propia proyección.** No escribe hacia el ERP ni ofrece un CRUD de estudiantes o materias; eso está fuera del alcance declarado (SUP-05).
 - **La sincronización es idempotente.** Cada evento se identifica por su clave en el ERP (`id_evaluacion_origen`, con restricción de unicidad), así que reprocesarlo actualiza la evaluación existente en vez de insertar otra. Sin esto, un reintento de la plataforma de integración duplicaría la fila y distorsionaría la nota.
 - **La paginación siempre lleva un orden explícito.** Una consulta paginada sin `ORDER BY` no garantiza el orden entre páginas: una misma fila puede aparecer dos veces o no aparecer nunca al recorrer el listado.
-- **Las llaves RSA de `src/main/resources/keys/` están versionadas a propósito.** Son de desarrollo, sin ningún dato real detrás, y así el repositorio corre recién clonado.
+- **No hay material criptográfico en el repositorio.** El par de llaves RSA de desarrollo se genera **en memoria al arrancar** (`LlavesRsaConfig`): el repositorio corre recién clonado sin que exista una llave privada versionada que cualquiera pudiera usar para firmar tokens válidos. En un ambiente real se configura `app.security.public-key-path` con la llave pública del IdP institucional, y el servicio deja de poseer llave privada alguna (valida tokens, no los emite).
+- **La sincronización tolera entregas concurrentes del mismo evento.** La verificación de idempotencia más la restricción de unicidad y el bloqueo optimista de `matricula` (`@Version`) hacen que dos entregas simultáneas no dupliquen la evaluación ni se pisen `nota_actual`; el controlador reintenta una vez y, si aun así choca, responde `409` para que la plataforma de integración reentregue.
+- **Los datos de demostración no viajan a producción.** Viven en `db/testdata` y solo se cargan con los perfiles `dev` y `test`; las migraciones de `db/migration` solo contienen esquema. Por la misma razón, la consola H2, el emisor de tokens de prueba y Swagger UI solo se exponen con el perfil `dev` activo.
 
 ## Qué se implementó y qué quedó fuera
 
-**Implementado:** los dos endpoints del contrato con paginación ordenada y validación de parámetros; el modelo de datos completo con migraciones Flyway y datos de prueba; seguridad JWT con las dos reglas de autorización; el manejo uniforme de errores; el sincronizador que recalcula la nota; documentación OpenAPI; y 23 pruebas (unitarias del cálculo ponderado, integración de los endpoints, idempotencia de la sincronización, y los casos negativos de autorización, validación, tipo de parámetro y recurso inexistente).
+**Implementado:** los dos endpoints del contrato con paginación ordenada y validación de parámetros; el modelo de datos completo con migraciones Flyway y datos de prueba separados por perfil; seguridad JWT (firma, vigencia, emisor y audiencia) con las dos reglas de autorización; el manejo uniforme de errores; el sincronizador que recalcula la nota, idempotente y tolerante a entregas concurrentes; documentación OpenAPI en el perfil `dev`; y 27 pruebas (unitarias del cálculo ponderado y la reasignación de evaluaciones, integración de los endpoints, idempotencia de la sincronización, y los casos negativos de autorización —incluido un rol desconocido—, validación, tipo de parámetro, estudiante inexistente y colecciones vacías).
 
 **Fuera de alcance, de forma deliberada:**
 
@@ -145,6 +147,7 @@ Errores, siempre con el mismo sobre `{"error": "...", "mensaje": "..."}`: `PARAM
 - **Observabilidad completa.** Hay salud (`/actuator/health`) y los errores inesperados quedan en el log con su traza, pero falta lo que pide SUP-23 para responder al Escenario A de la Parte 4: trazas distribuidas con identificador de correlación y métricas exportadas.
 - **La auditoría de accesos** que exige el Escenario B de la Parte 4 (SUP-19). Está diseñada, no construida.
 - **Caché.** El diseño define políticas por dato (SUP-14, SUP-15), pero aplican a la capa de agregación de Vista 360° Core, no a este servicio.
+- **CORS.** El Frontend descrito en la Parte 1 consumiría este servicio desde un navegador; la configuración de orígenes permitidos depende del dominio real donde se despliegue y se añade en ese momento, junto con el límite de tasa en la puerta de enlace.
 
 ## Uso de herramientas de inteligencia artificial
 
